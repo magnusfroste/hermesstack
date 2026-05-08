@@ -37,12 +37,7 @@ services:
       - "traefik.http.services.hermes-customer.loadbalancer.server.port=3000"
     networks:
       - hermes-network
-    command: >
-      sh -c "echo 'Starting Customer Agent...' &&
-             python -m hermes_cli.main dashboard 
-             --host 0.0.0.0 
-             --port 3000 
-             --insecure"
+    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
 
   # ================================
   # OPERATOR AGENT (BSS/ERP med Flowwink MCP)
@@ -79,12 +74,7 @@ services:
       - "traefik.http.services.hermes-operator.loadbalancer.server.port=3000"
     networks:
       - hermes-network
-    command: >
-      sh -c "echo 'Starting Operator Agent...' &&
-             python -m hermes_cli.main dashboard 
-             --host 0.0.0.0 
-             --port 3000 
-             --insecure"
+    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
 
   # ================================
   # SUPPLIER AGENT (Leverantör)
@@ -119,12 +109,7 @@ services:
       - "traefik.http.services.hermes-supplier.loadbalancer.server.port=3000"
     networks:
       - hermes-network
-    command: >
-      sh -c "echo 'Starting Supplier Agent...' &&
-             python -m hermes_cli.main dashboard 
-             --host 0.0.0.0 
-             --port 3000 
-             --insecure"
+    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
 
   # ================================
   # REDIS - Delad message queue (optional)
