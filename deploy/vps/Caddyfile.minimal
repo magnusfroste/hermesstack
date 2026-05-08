@@ -1,0 +1,13 @@
+# Minimal Caddyfile för Hermes
+
+operator.hermes.froste.eu {
+    reverse_proxy localhost:3002
+}
+
+customer.hermes.froste.eu {
+    reverse_proxy localhost:3001
+}
+
+supplier.hermes.froste.eu {
+    reverse_proxy localhost:3003
+}
