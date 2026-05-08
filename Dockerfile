@@ -41,4 +41,4 @@ RUN sed -i 's/allow_origin_regex=r"^https?:\/\/(localhost|127\\.0\\.0\\.1)(:\\d+
 EXPOSE 3000
 
 # Start command - bind to 0.0.0.0 for container, use --insecure for external access
-CMD ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure", "--no-browser"]
+CMD ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
