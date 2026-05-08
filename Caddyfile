@@ -1,0 +1,109 @@
+# Hermes Multi-Agent Caddy Configuration
+# Placera i /etc/caddy/Caddyfile
+
+# ============================================
+# CUSTOMER AGENT
+# ============================================
+customer.hermes.froste.eu {
+    reverse_proxy localhost:3001
+    
+    # Auto HTTPS (Let's Encrypt)
+    tls {
+        # För Cloudflare DNS challenge (om du använder Cloudflare):
+        # dns cloudflare {env.CF_API_TOKEN}
+        
+        # Alternativt: Email för Let's Encrypt
+        # email admin@froste.eu
+    }
+    
+    # Headers för Hermes
+    header {
+        # CORS för API
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "*"
+    }
+    
+    # WebSocket support
+    @websockets {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websockets localhost:3001
+    
+    # Logging
+    log {
+        output file /var/log/caddy/customer-access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+    }
+}
+
+# ============================================
+# OPERATOR AGENT
+# ============================================
+operator.hermes.froste.eu {
+    reverse_proxy localhost:3002
+    
+    tls {
+        # dns cloudflare {env.CF_API_TOKEN}
+    }
+    
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "*"
+    }
+    
+    @websockets {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websockets localhost:3002
+    
+    log {
+        output file /var/log/caddy/operator-access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+    }
+}
+
+# ============================================
+# SUPPLIER AGENT
+# ============================================
+supplier.hermes.froste.eu {
+    reverse_proxy localhost:3003
+    
+    tls {
+        # dns cloudflare {env.CF_API_TOKEN}
+    }
+    
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "*"
+    }
+    
+    @websockets {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websockets localhost:3003
+    
+    log {
+        output file /var/log/caddy/supplier-access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+    }
+}
+
+# ============================================
+# Caddy Admin API (valfritt, lokal only)
+# ============================================
+:2019 {
+    bind 127.0.0.1 ::1
+    admin off
+}

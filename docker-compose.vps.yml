@@ -1,0 +1,132 @@
+# Hermes Multi-Agent - VPS Edition
+# Ingen Traefik! Caddy hanterar allt.
+
+version: '3.8'
+
+services:
+  # ================================
+  # CUSTOMER AGENT
+  # ================================
+  hermes-customer:
+    build:
+      context: .
+      dockerfile: Dockerfile.multi-agent
+      args:
+        - PROFILE=customer
+        - PERSONALITY=ecommerce_customer
+        - HERMES_SESSION_TOKEN=${HERMES_CUSTOMER_TOKEN}
+    container_name: hermes-customer
+    restart: unless-stopped
+    environment:
+      - HERMES_HOME=/data/hermes-profiles/customer
+      - HERMES_MODEL=${HERMES_MODEL:-openai/gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PROFILE_ROLE=customer
+      - HERMES_SESSION_TOKEN=${HERMES_CUSTOMER_TOKEN}
+    volumes:
+      - customer-data:/data/hermes-profiles/customer
+      - ./profiles/customer/config.yaml:/data/hermes-profiles/customer/config.yaml:ro
+    ports:
+      - "127.0.0.1:3001:3000"  # Bara lokal åtkomst (Caddy proxyar)
+    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ================================
+  # OPERATOR AGENT
+  # ================================
+  hermes-operator:
+    build:
+      context: .
+      dockerfile: Dockerfile.multi-agent
+      args:
+        - PROFILE=operator
+        - PERSONALITY=bss_operator
+        - HERMES_SESSION_TOKEN=${HERMES_OPERATOR_TOKEN}
+    container_name: hermes-operator
+    restart: unless-stopped
+    environment:
+      - HERMES_HOME=/data/hermes-profiles/operator
+      - HERMES_MODEL=${HERMES_MODEL:-openai/gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - FLOWWINK_API_KEY=${FLOWWINK_API_KEY}
+      - PROFILE_ROLE=operator
+      - HERMES_SESSION_TOKEN=${HERMES_OPERATOR_TOKEN}
+    volumes:
+      - operator-data:/data/hermes-profiles/operator
+      - ./profiles/operator/config.yaml:/data/hermes-profiles/operator/config.yaml:ro
+      - ./profiles/operator/mcp_config.yaml:/data/hermes-profiles/operator/mcp_config.yaml:ro
+    ports:
+      - "127.0.0.1:3002:3000"  # Bara lokal åtkomst
+    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ================================
+  # SUPPLIER AGENT
+  # ================================
+  hermes-supplier:
+    build:
+      context: .
+      dockerfile: Dockerfile.multi-agent
+      args:
+        - PROFILE=supplier
+        - PERSONALITY=b2b_supplier
+        - HERMES_SESSION_TOKEN=${HERMES_SUPPLIER_TOKEN}
+    container_name: hermes-supplier
+    restart: unless-stopped
+    environment:
+      - HERMES_HOME=/data/hermes-profiles/supplier
+      - HERMES_MODEL=${HERMES_MODEL:-openai/gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PROFILE_ROLE=supplier
+      - HERMES_SESSION_TOKEN=${HERMES_SUPPLIER_TOKEN}
+    volumes:
+      - supplier-data:/data/hermes-profiles/supplier
+      - ./profiles/supplier/config.yaml:/data/hermes-profiles/supplier/config.yaml:ro
+    ports:
+      - "127.0.0.1:3003:3000"  # Bara lokal åtkomst
+    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ================================
+  # REDIS (optional)
+  # ================================
+  redis:
+    image: redis:7-alpine
+    container_name: hermes-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - hermes-network
+    command: redis-server --appendonly yes
+
+volumes:
+  customer-data:
+  operator-data:
+  supplier-data:
+  redis-data:
+
+networks:
+  hermes-network:
+    driver: bridge
