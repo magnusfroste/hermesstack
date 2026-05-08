@@ -9,7 +9,7 @@ services:
   # ================================
   hermes-customer:
     build:
-      context: .
+      context: ../..
       dockerfile: Dockerfile.multi-agent
       args:
         - PROFILE=customer
@@ -43,7 +43,7 @@ services:
   # ================================
   hermes-operator:
     build:
-      context: .
+      context: ../..
       dockerfile: Dockerfile.multi-agent
       args:
         - PROFILE=operator
@@ -79,7 +79,7 @@ services:
   # ================================
   hermes-supplier:
     build:
-      context: .
+      context: ../..
       dockerfile: Dockerfile.multi-agent
       args:
         - PROFILE=supplier
