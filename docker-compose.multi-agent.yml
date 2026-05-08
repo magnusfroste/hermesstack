@@ -29,12 +29,6 @@ services:
       - ./profiles/customer/config.yaml:/data/hermes-profiles/customer/config.yaml:ro
     ports:
       - "3001:3000"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hermes-customer.rule=Host(`customer.hermes.froste.eu`)"
-      - "traefik.http.routers.hermes-customer.entrypoints=websecure"
-      - "traefik.http.routers.hermes-customer.tls.certresolver=letsencrypt"
-      - "traefik.http.services.hermes-customer.loadbalancer.server.port=3000"
     networks:
       - hermes-network
     command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
@@ -66,12 +60,6 @@ services:
       - ./profiles/operator/mcp_config.yaml:/data/hermes-profiles/operator/mcp_config.yaml:ro
     ports:
       - "3002:3000"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hermes-operator.rule=Host(`operator.hermes.froste.eu`)"
-      - "traefik.http.routers.hermes-operator.entrypoints=websecure"
-      - "traefik.http.routers.hermes-operator.tls.certresolver=letsencrypt"
-      - "traefik.http.services.hermes-operator.loadbalancer.server.port=3000"
     networks:
       - hermes-network
     command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
@@ -101,12 +89,6 @@ services:
       - ./profiles/supplier/config.yaml:/data/hermes-profiles/supplier/config.yaml:ro
     ports:
       - "3003:3000"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hermes-supplier.rule=Host(`supplier.hermes.froste.eu`)"
-      - "traefik.http.routers.hermes-supplier.entrypoints=websecure"
-      - "traefik.http.routers.hermes-supplier.tls.certresolver=letsencrypt"
-      - "traefik.http.services.hermes-supplier.loadbalancer.server.port=3000"
     networks:
       - hermes-network
     command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]

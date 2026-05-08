@@ -1,0 +1,28 @@
+{
+  "name": "hermes-supplier",
+  "type": "app",
+  "source": {
+    "type": "git",
+    "repository": "https://github.com/magnusfroste/hermesstack",
+    "branch": "main"
+  },
+  "build": {
+    "type": "dockerfile",
+    "dockerfile": "Dockerfile.multi-agent",
+    "args": {
+      "PROFILE": "supplier",
+      "PERSONALITY": "b2b_supplier",
+      "HERMES_SESSION_TOKEN": "hermes-supplier-secret-token-2024-magnusfroste"
+    }
+  },
+  "deploy": {
+    "command": ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"],
+    "env": [
+      "HERMES_HOME=/data/hermes-profiles/supplier",
+      "HERMES_MODEL=openai/gpt-4o-mini",
+      "HERMES_SESSION_TOKEN=hermes-supplier-secret-token-2024-magnusfroste"
+    ]
+  },
+  "ports": [3000],
+  "volumes": ["/data/hermes-profiles/supplier"]
+}

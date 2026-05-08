@@ -1,0 +1,29 @@
+{
+  "name": "hermes-operator",
+  "type": "app", 
+  "source": {
+    "type": "git",
+    "repository": "https://github.com/magnusfroste/hermesstack",
+    "branch": "main"
+  },
+  "build": {
+    "type": "dockerfile",
+    "dockerfile": "Dockerfile.multi-agent",
+    "args": {
+      "PROFILE": "operator",
+      "PERSONALITY": "bss_operator",
+      "HERMES_SESSION_TOKEN": "hermes-operator-secret-token-2024-magnusfroste"
+    }
+  },
+  "deploy": {
+    "command": ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"],
+    "env": [
+      "HERMES_HOME=/data/hermes-profiles/operator",
+      "HERMES_MODEL=openai/gpt-4o-mini",
+      "HERMES_SESSION_TOKEN=hermes-operator-secret-token-2024-magnusfroste",
+      "FLOWWINK_API_KEY=fwk_1cf484bf2fe6cd480b20ac7af53d5cf2dae5382f1a7c51c3f5042dd8bc26a369"
+    ]
+  },
+  "ports": [3000],
+  "volumes": ["/data/hermes-profiles/operator"]
+}
