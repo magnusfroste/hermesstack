@@ -40,9 +40,9 @@ context:
 # MCP-servrar (Flowwink integration)
 mcp_servers:
   flowwink:
-    url: https://api.flowwink.com/mcp
+    url: https://rzhjotxffjfsdlhrdkpj.supabase.co/functions/v1/mcp-server
     headers:
-      Authorization: Bearer ${FLOWWINK_API_KEY}
+      Authorization: Bearer fwk_1cf484bf2fe6cd480b20ac7af53d5cf2dae5382f1a7c51c3f5042dd8bc26a369
     timeout: 120
     connect_timeout: 60
   
