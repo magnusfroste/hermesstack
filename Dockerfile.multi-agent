@@ -6,6 +6,7 @@ FROM python:3.11-slim
 # Build arguments
 ARG PROFILE=operator
 ARG PERSONALITY=bss_operator
+ARG HERMES_SESSION_TOKEN
 
 WORKDIR /app
 
@@ -42,7 +43,10 @@ RUN mkdir -p /data/hermes-profiles/${PROFILE}/{memories,sessions,skills,skins,lo
 RUN sed -i 's/allow_origin_regex=r"^https?:\/\/(localhost|127\\.0\\.0\\.1)(:\\d+)?$"/allow_origins=["*"]/g' hermes_cli/web_server.py
 
 # Patch CORS middleware to be more permissive for inter-agent communication
-RUN sed -i 's/allow_origin_regex=r"^https?:\/\/(localhost|127\\.0\\.0\\.1)(:\\d+)?$"/allow_origins=["*"]/g' hermes_cli/web_server.py || true
+RUN sed -i 's/allow_origin_regex=r"^https?:\/\/(localhost|127\\.0\\.0\\.1)(:\\d+)?$"/allow_origins=["*"]/g' hermes_cli/web_server.py
+
+# Patch web_server.py to support static session token from env var
+RUN sed -i 's/_SESSION_TOKEN = secrets.token_urlsafe(32)/_SESSION_TOKEN = os.environ.get("HERMES_SESSION_TOKEN") or secrets.token_urlsafe(32)/' hermes_cli/web_server.py
 
 # Expose the port
 EXPOSE 3000
@@ -51,6 +55,7 @@ EXPOSE 3000
 ENV HERMES_HOME=/data/hermes-profiles/${PROFILE}
 ENV PROFILE_ROLE=${PROFILE}
 ENV PYTHONUNBUFFERED=1
+ENV HERMES_SESSION_TOKEN=${HERMES_SESSION_TOKEN}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

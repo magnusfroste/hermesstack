@@ -14,6 +14,7 @@ services:
       args:
         - PROFILE=customer
         - PERSONALITY=ecommerce_customer
+        - HERMES_SESSION_TOKEN=${HERMES_CUSTOMER_TOKEN}
     container_name: hermes-customer
     restart: unless-stopped
     environment:
@@ -22,7 +23,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - PROFILE_ROLE=customer
-      - OPERATOR_URL=http://hermes-operator:3000
+      - HERMES_SESSION_TOKEN=${HERMES_CUSTOMER_TOKEN}
     volumes:
       - customer-data:/data/hermes-profiles/customer
       - ./profiles/customer/config.yaml:/data/hermes-profiles/customer/config.yaml:ro
@@ -53,6 +54,7 @@ services:
       args:
         - PROFILE=operator
         - PERSONALITY=bss_operator
+        - HERMES_SESSION_TOKEN=${HERMES_OPERATOR_TOKEN}
     container_name: hermes-operator
     restart: unless-stopped
     environment:
@@ -62,8 +64,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - FLOWWINK_API_KEY=${FLOWWINK_API_KEY}
       - PROFILE_ROLE=operator
-      - CUSTOMER_URL=http://hermes-customer:3000
-      - SUPPLIER_URL=http://hermes-supplier:3000
+      - HERMES_SESSION_TOKEN=${HERMES_OPERATOR_TOKEN}
     volumes:
       - operator-data:/data/hermes-profiles/operator
       - ./profiles/operator/config.yaml:/data/hermes-profiles/operator/config.yaml:ro
@@ -95,6 +96,7 @@ services:
       args:
         - PROFILE=supplier
         - PERSONALITY=b2b_supplier
+        - HERMES_SESSION_TOKEN=${HERMES_SUPPLIER_TOKEN}
     container_name: hermes-supplier
     restart: unless-stopped
     environment:
@@ -103,7 +105,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - PROFILE_ROLE=supplier
-      - OPERATOR_URL=http://hermes-operator:3000
+      - HERMES_SESSION_TOKEN=${HERMES_SUPPLIER_TOKEN}
     volumes:
       - supplier-data:/data/hermes-profiles/supplier
       - ./profiles/supplier/config.yaml:/data/hermes-profiles/supplier/config.yaml:ro
