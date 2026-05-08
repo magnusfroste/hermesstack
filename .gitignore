@@ -1,1 +1,9 @@
 .env
+.git-credentials
+*.pyc
+__pycache__/
+*.log
+node_modules/
+hermes-src/
+dist/
+*.egg-info/

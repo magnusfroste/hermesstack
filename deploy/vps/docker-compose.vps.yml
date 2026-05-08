@@ -1,7 +1,5 @@
 # Hermes Multi-Agent - VPS Edition
-# Ingen Traefik! Caddy hanterar allt.
-
-version: '3.8'
+# Caddy hanterar reverse proxy + HTTPS
 
 services:
   # ================================
@@ -10,7 +8,7 @@ services:
   hermes-customer:
     build:
       context: ../..
-      dockerfile: Dockerfile.multi-agent
+      dockerfile: deploy/vps/Dockerfile.multi-agent
       args:
         - PROFILE=customer
         - PERSONALITY=ecommerce_customer
@@ -20,16 +18,15 @@ services:
     environment:
       - HERMES_HOME=/data/hermes-profiles/customer
       - HERMES_MODEL=${HERMES_MODEL:-openai/gpt-4o-mini}
-      - PROFILE_ROLE=customer
-      - HERMES_SESSION_TOKEN=${HERMES_CUSTOMER_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-
+      - PROFILE_ROLE=customer
+      - HERMES_SESSION_TOKEN=${HERMES_CUSTOMER_TOKEN}
     volumes:
       - customer-data:/data/hermes-profiles/customer
       - ../../profiles/customer/config.yaml:/data/hermes-profiles/customer/config.yaml:ro
     ports:
-      - "127.0.0.1:3001:3000"  # Bara lokal åtkomst (Caddy proxyar)
+      - "127.0.0.1:3001:3000"
     command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
     networks:
       - hermes-network
@@ -45,7 +42,7 @@ services:
   hermes-operator:
     build:
       context: ../..
-      dockerfile: Dockerfile.multi-agent
+      dockerfile: deploy/vps/Dockerfile.multi-agent
       args:
         - PROFILE=operator
         - PERSONALITY=bss_operator
@@ -63,9 +60,8 @@ services:
     volumes:
       - operator-data:/data/hermes-profiles/operator
       - ../../profiles/operator/config.yaml:/data/hermes-profiles/operator/config.yaml:ro
-      - ../../profiles/operator/mcp_config.yaml:/data/hermes-profiles/operator/mcp_config.yaml:ro
     ports:
-      - "127.0.0.1:3002:3000"  # Bara lokal åtkomst
+      - "127.0.0.1:3002:3000"
     command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
     networks:
       - hermes-network
@@ -81,7 +77,7 @@ services:
   hermes-supplier:
     build:
       context: ../..
-      dockerfile: Dockerfile.multi-agent
+      dockerfile: deploy/vps/Dockerfile.multi-agent
       args:
         - PROFILE=supplier
         - PERSONALITY=b2b_supplier
@@ -99,7 +95,7 @@ services:
       - supplier-data:/data/hermes-profiles/supplier
       - ../../profiles/supplier/config.yaml:/data/hermes-profiles/supplier/config.yaml:ro
     ports:
-      - "127.0.0.1:3003:3000"  # Bara lokal åtkomst
+      - "127.0.0.1:3003:3000"
     command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
     networks:
       - hermes-network

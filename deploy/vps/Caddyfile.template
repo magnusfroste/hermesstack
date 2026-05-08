@@ -1,0 +1,85 @@
+# Hermes Multi-Agent Caddy Configuration
+# Template — placeholders replaced by vps-setup.sh
+# Placeholders: customer.hermes.example.com, operator.hermes.example.com, supplier.hermes.example.com
+
+{
+    admin localhost:2019
+}
+
+# ============================================
+# CUSTOMER AGENT
+# ============================================
+customer.hermes.example.com {
+    reverse_proxy localhost:3001
+
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers *
+    }
+
+    @websockets {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websockets localhost:3001
+
+    log {
+        output file /var/log/caddy/customer-access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+    }
+}
+
+# ============================================
+# OPERATOR AGENT
+# ============================================
+operator.hermes.example.com {
+    reverse_proxy localhost:3002
+
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers *
+    }
+
+    @websockets {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websockets localhost:3002
+
+    log {
+        output file /var/log/caddy/operator-access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+    }
+}
+
+# ============================================
+# SUPPLIER AGENT
+# ============================================
+supplier.hermes.example.com {
+    reverse_proxy localhost:3003
+
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers *
+    }
+
+    @websockets {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websockets localhost:3003
+
+    log {
+        output file /var/log/caddy/supplier-access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+    }
+}
