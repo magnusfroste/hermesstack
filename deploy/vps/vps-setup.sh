@@ -38,33 +38,11 @@ cd /opt/hermesstack
 echo "⬇️ Klonar repository..."
 git clone https://github.com/magnusfroste/hermesstack.git .
 
-# 7. Skapa .env fil (användaren måste fylla i)
-echo "📝 Skapar .env fil..."
-cat > .env << 'EOF'
-# ============================================
-# LLM PROVIDERS (minst en krävs)
-# ============================================
-OPENAI_API_KEY=sk-...  # Fyll i din OpenAI API-nyckel
+# 7. Skapa .env fil från mall (användaren måste fylla i API-nycklar)
+echo "📝 Skapar .env fil från mall..."
+cp .env.multi-agent.example .env
 
-# ============================================
-# HERMES KONFIGURATION
-# ============================================
-HERMES_MODEL=openai/gpt-4o-mini
-
-# ============================================
-# FLOWWINK MCP
-# ============================================
-FLOWWINK_API_KEY=fwk_1cf484bf2fe6cd480b20ac7af53d5cf2dae5382f1a7c51c3f5042dd8bc26a369
-
-# ============================================
-# SESSION TOKENS (statiska för API-åtkomst)
-# ============================================
-HERMES_OPERATOR_TOKEN=hermes-operator-secret-token-2024-magnusfroste
-HERMES_CUSTOMER_TOKEN=hermes-customer-secret-token-2024-magnusfroste
-HERMES_SUPPLIER_TOKEN=hermes-supplier-secret-token-2024-magnusfroste
-EOF
-
-echo "⚠️  VIKTIGT: Redigera /opt/hermesstack/.env och fyll i din OPENAI_API_KEY!"
+echo "⚠️  VIKTIGT: Redigera /opt/hermesstack/.env och fyll i dina API-nycklar (OPENAI_API_KEY, ANTHROPIC_API_KEY, FLOWWINK_API_KEY om operator används)!"
 
 # 8. Installera Caddy-konfiguration
 echo "🌐 Installerar Caddy-konfiguration..."
