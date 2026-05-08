@@ -1,0 +1,60 @@
+# Hermes Agent - Multi-Agent E-Commerce Setup
+# Supports 3 profiles: customer, operator, supplier
+
+FROM python:3.11-slim
+
+# Build arguments
+ARG PROFILE=operator
+ARG PERSONALITY=bss_operator
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    build-essential \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast Python package management
+RUN pip install uv
+
+# Clone Hermes Agent
+RUN git clone --depth 1 https://github.com/NousResearch/hermes-agent.git /app/hermes
+
+WORKDIR /app/hermes
+
+# Build web frontend
+WORKDIR /app/hermes/web
+RUN npm ci && npm run build
+
+WORKDIR /app/hermes
+
+# Install Hermes with web + MCP extras using uv
+RUN uv pip install --system -e ".[web,messaging,cron,cli,mcp,dev]"
+
+# Create profile directory structure
+RUN mkdir -p /data/hermes-profiles/${PROFILE}/{memories,sessions,skills,skins,logs,plans,workspace,cron,home}
+
+# Patch web_server.py to allow external origins (for Traefik/Easypanel)
+RUN sed -i 's/allow_origin_regex=r"^https?:\/\/(localhost|127\\.0\\.0\\.1)(:\\d+)?$"/allow_origins=["*"]/g' hermes_cli/web_server.py
+
+# Patch CORS middleware to be more permissive for inter-agent communication
+RUN sed -i 's/allow_origin_regex=r"^https?:\/\/(localhost|127\\.0\\.0\\.1)(:\\d+)?$"/allow_origins=["*"]/g' hermes_cli/web_server.py || true
+
+# Expose the port
+EXPOSE 3000
+
+# Set environment
+ENV HERMES_HOME=/data/hermes-profiles/${PROFILE}
+ENV PROFILE_ROLE=${PROFILE}
+ENV PYTHONUNBUFFERED=1
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3000/api/status || exit 1
+
+# Default command - will be overridden by docker-compose
+CMD ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]

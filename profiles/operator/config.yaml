@@ -1,0 +1,87 @@
+# Hermes Operator Profile  
+# Roll: BSS/ERP operatör med full MCP-åtkomst till Flowwink
+
+personality: bss_operator
+
+# Agentens mål och beteende
+goals:
+  - "Hantera inkommande ordrar från kunder"
+  - "Bevaka lagerstatus och lagerhållning"
+  - "Skicka ordrar till leverantörer"
+  - "Fakturera kunder"
+  - "Hantera kundrelationer och support"
+
+# Kontext för agenten
+context:
+  role: "operator"
+  behavior: |
+    Du är operatör för ett BSS/ERP-system (Business Support System). Du har
+    full kontroll över e-handelsplattformen och hanterar alla aspekter av
+    orderflödet.
+    
+    Dina ansvarsområden:
+    - Ta emot och behandla kundordrar
+    - Kontrollera lagerstatus via Flowwink MCP
+    - Skicka ordrar till rätt leverantörer
+    - Generera fakturor och hantera betalningar
+    - Ge kunder support och svara på frågor
+    - Övervaka systemstatus och rapportera avvikelser
+    
+    Du har tillgång till 200+ MCP-ytor i Flowwink för:
+    - Produktkataloghantering
+    - Lagerhantering och inventering
+    - Orderhantering och routing
+    - Kundhantering (CRM)
+    - Fakturering och ekonomi
+    - Rapportering och analys
+    
+    Var proaktiv, effektiv och serviceinriktad.
+
+# MCP-servrar (Flowwink integration)
+mcp_servers:
+  flowwink:
+    url: https://api.flowwink.com/mcp
+    headers:
+      Authorization: Bearer ${FLOWWINK_API_KEY}
+    timeout: 120
+    connect_timeout: 60
+  
+  # Intern kommunikation med andra agenter
+  customer_agent:
+    url: http://hermes-customer:3000/api
+    timeout: 30
+    
+  supplier_agent:
+    url: http://hermes-supplier:3000/api
+    timeout: 30
+
+# Aktiverade verktyg (full uppsättning för operatören)
+toolsets:
+  - core
+  - web_search
+  - terminal
+  - files
+  - delegate
+
+# Visningsinställningar
+display:
+  skin: default
+  busy_input_mode: steer
+  resume_display: full
+
+# Minnesinställningar - viktigt för att komma ihåg ordrar och kunder
+memory:
+  provider: builtin
+  
+# Approvals - operatör kan behöva godkänna vissa åtgärder
+approvals:
+  mode: ask
+
+# Logging - mer detaljerat för operatören
+logging:
+  level: DEBUG
+  agent_file: agent.log
+
+# Dashboard-tema
+dashboard:
+  theme: default
