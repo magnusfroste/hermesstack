@@ -45,6 +45,14 @@ mcp_servers:
       Authorization: Bearer fwk_1cf484bf2fe6cd480b20ac7af53d5cf2dae5382f1a7c51c3f5042dd8bc26a369
     timeout: 120
     connect_timeout: 60
+    tools:
+      include:
+        - "order*"
+        - "product*"
+        - "customer*"
+        - "invoice*"
+        - "inventory*"
+        - "search*"
   
   # Intern kommunikation med andra agenter
   customer_agent:
@@ -85,3 +93,14 @@ logging:
 # Dashboard-tema
 dashboard:
   theme: default
+
+# Provider configuration
+providers:
+  openai:
+    api_key_env: OPENAI_API_KEY
+    api_mode: chat_completions
+    base_url: https://api.openai.com/v1
+    default_model: gpt-4o-mini
+
+# Default model (without provider prefix for direct OpenAI API)
+model: gpt-4o-mini

@@ -27,7 +27,7 @@ services:
       - ../../profiles/customer/config.yaml:/data/hermes-profiles/customer/config.yaml:ro
     ports:
       - "127.0.0.1:3001:3000"
-    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
+    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure", "--tui"]
     networks:
       - hermes-network
     healthcheck:
@@ -62,7 +62,7 @@ services:
       - ../../profiles/operator/config.yaml:/data/hermes-profiles/operator/config.yaml:ro
     ports:
       - "127.0.0.1:3002:3000"
-    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
+    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure", "--tui"]
     networks:
       - hermes-network
     healthcheck:
@@ -96,7 +96,7 @@ services:
       - ../../profiles/supplier/config.yaml:/data/hermes-profiles/supplier/config.yaml:ro
     ports:
       - "127.0.0.1:3003:3000"
-    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure"]
+    command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure", "--tui"]
     networks:
       - hermes-network
     healthcheck:
