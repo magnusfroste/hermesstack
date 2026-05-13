@@ -7,7 +7,7 @@ services:
   # ================================
   hermes-customer:
     build:
-      context: ../..
+      context: /opt/hermeshotel
       dockerfile: deploy/vps/Dockerfile.multi-agent
       args:
         - PROFILE=customer
@@ -24,7 +24,7 @@ services:
       - HERMES_SESSION_TOKEN=${HERMES_CUSTOMER_TOKEN}
     volumes:
       - customer-data:/data/hermes-profiles/customer
-      - ../../profiles/customer/config.yaml:/data/hermes-profiles/customer/config.yaml:ro
+      - /opt/hermeshotel/profiles/customer/config.yaml:/data/hermes-profiles/customer/config.yaml:ro
     ports:
       - "127.0.0.1:3001:3000"
     command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure", "--tui"]
@@ -57,9 +57,10 @@ services:
       - FLOWWINK_API_KEY=${FLOWWINK_API_KEY}
       - PROFILE_ROLE=operator
       - HERMES_SESSION_TOKEN=${HERMES_OPERATOR_TOKEN}
+      - HERMES_DASHBOARD_TUI=1
     volumes:
       - operator-data:/data/hermes-profiles/operator
-      - ../../profiles/operator/config.yaml:/data/hermes-profiles/operator/config.yaml:ro
+      - /opt/hermeshotel/profiles/operator/config.yaml:/data/hermes-profiles/operator/config.yaml:ro
     ports:
       - "127.0.0.1:3002:3000"
     command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure", "--tui"]
@@ -93,7 +94,7 @@ services:
       - HERMES_SESSION_TOKEN=${HERMES_SUPPLIER_TOKEN}
     volumes:
       - supplier-data:/data/hermes-profiles/supplier
-      - ../../profiles/supplier/config.yaml:/data/hermes-profiles/supplier/config.yaml:ro
+      - /opt/hermeshotel/profiles/supplier/config.yaml:/data/hermes-profiles/supplier/config.yaml:ro
     ports:
       - "127.0.0.1:3003:3000"
     command: ["python", "-m", "hermes_cli.main", "dashboard", "--host", "0.0.0.0", "--port", "3000", "--insecure", "--tui"]

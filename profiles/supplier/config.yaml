@@ -35,12 +35,24 @@ context:
     
     Var responsiv och professionell i kommunikationen.
 
-# Aktiverade verktyg (begränsad uppsättning för leverantören)
+# Aktiverade verktyg (generös uppsättning för leverantören)
 toolsets:
   - core
   - web_search
+  - terminal
   - files
-  # Inga MCP-servrar för leverantören
+  - delegate
+
+# Provider configuration
+providers:
+  openai:
+    api_key_env: OPENAI_API_KEY
+    api_mode: chat_completions
+    base_url: https://api.openai.com/v1
+    default_model: gpt-4o-mini
+
+# Default model
+model: gpt-4o-mini
 
 # Visningsinställningar
 display:

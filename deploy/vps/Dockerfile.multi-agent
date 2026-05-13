@@ -36,6 +36,11 @@ WORKDIR /app/hermes
 # Install Hermes with web + MCP extras using uv
 RUN uv pip install --system -e ".[web,messaging,cron,cli,mcp,dev]"
 
+# Install ptyprocess for embedded chat PTY support
+RUN uv pip install --system ptyprocess
+
+WORKDIR /app/hermes
+
 # Create profile directory structure
 RUN mkdir -p /data/hermes-profiles/${PROFILE}/{memories,sessions,skills,skins,logs,plans,workspace,cron,home}
 

@@ -27,11 +27,24 @@ context:
     Du är realistisk som kund - har en budget, jämför alternativ, och vill
     ha valuta för pengarna. Du kan vara kräsen men rimlig.
 
-# Aktiverade verktyg (begränsad uppsättning för kunden)
+# Aktiverade verktyg (generös uppsättning för kunden)
 toolsets:
   - core
   - web_search
-  # Inga MCP-servrar för kunden
+  - terminal
+  - files
+  - delegate
+
+# Provider configuration
+providers:
+  openai:
+    api_key_env: OPENAI_API_KEY
+    api_mode: chat_completions
+    base_url: https://api.openai.com/v1
+    default_model: gpt-4o-mini
+
+# Default model
+model: gpt-4o-mini
 
 # Visningsinställningar
 display:

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Hermes Multi-Agent TUI — Full Control Dashboard
+Hermes Multi-Agent TUI — Arcane-Style Full Control Dashboard
 Manages customer, operator, supplier agents without entering containers.
 
 Usage: python3 hermes-tui.py [options]
-  --env-file PATH    Path to .env file (default: /opt/hermesstack/.env)
+  --env-file PATH    Path to .env file (default: /opt/hermeshotel/.env)
   --compose PATH     Path to docker-compose file
   --no-color         Disable ANSI colors
 """
@@ -15,18 +15,21 @@ import os
 import subprocess
 import sys
 import time
+import re
 import urllib.request
 import urllib.error
 from datetime import datetime
 
+VERSION = "0.14.0"
+
 # ── Configuration ──
-COMPOSE_FILE = os.environ.get("HERMES_COMPOSE", "/opt/hermesstack/deploy/vps/docker-compose.vps.yml")
-ENV_FILE = os.environ.get("HERMES_ENV", "/opt/hermesstack/.env")
+COMPOSE_FILE = os.environ.get("HERMES_COMPOSE", "/opt/hermeshotel/deploy/vps/docker-compose.vps.yml")
+ENV_FILE = os.environ.get("HERMES_ENV", "/opt/hermeshotel/.env")
 
 AGENTS = {
-    "customer":  {"port": 3001, "color": 2,  "emoji": "🛒"},
-    "operator":  {"port": 3002, "color": 3,  "emoji": "⚙️"},
-    "supplier":  {"port": 3003, "color": 4,  "emoji": "📦"},
+    "customer":  {"port": 3001, "domain": "customer.froste.eu", "color": 2,  "emoji": "\U0001f6d2"},
+    "operator":  {"port": 3002, "domain": "operator.froste.eu", "color": 3,  "emoji": "\u2699\ufe0f"},
+    "supplier":  {"port": 3003, "domain": "supplier.froste.eu", "color": 4,  "emoji": "\U0001f4e6"},
 }
 
 # ── Color setup ──
@@ -36,14 +39,17 @@ def init_colors():
     if not COLORS_INIT:
         curses.start_color()
         curses.use_default_colors()
-        curses.init_pair(1, curses.COLOR_GREEN, -1)   # OK
-        curses.init_pair(2, curses.COLOR_CYAN, -1)     # Customer
-        curses.init_pair(3, curses.COLOR_YELLOW, -1)   # Operator
-        curses.init_pair(4, curses.COLOR_MAGENTA, -1)  # Supplier
-        curses.init_pair(5, curses.COLOR_RED, -1)      # Error
-        curses.init_pair(6, curses.COLOR_WHITE, curses.COLOR_BLUE)  # Header
-        curses.init_pair(7, curses.COLOR_BLACK, curses.COLOR_WHITE)  # Menu
-        curses.init_pair(8, curses.COLOR_GREEN, curses.COLOR_BLACK)  # Success bg
+        curses.init_pair(1, curses.COLOR_GREEN, -1)
+        curses.init_pair(2, curses.COLOR_CYAN, -1)
+        curses.init_pair(3, curses.COLOR_YELLOW, -1)
+        curses.init_pair(4, curses.COLOR_MAGENTA, -1)
+        curses.init_pair(5, curses.COLOR_RED, -1)
+        curses.init_pair(6, curses.COLOR_WHITE, curses.COLOR_BLUE)
+        curses.init_pair(7, curses.COLOR_BLACK, curses.COLOR_WHITE)
+        curses.init_pair(8, curses.COLOR_GREEN, curses.COLOR_BLACK)
+        curses.init_pair(9, curses.COLOR_WHITE, -1)
+        curses.init_pair(10, curses.COLOR_BLUE, -1)
+        curses.init_pair(11, curses.COLOR_WHITE, curses.COLOR_BLACK)
         COLORS_INIT = True
 
 # ── Utility ──
@@ -103,41 +109,138 @@ def check_agent_health(name, port):
     except Exception:
         return "unreachable", ""
 
-# ── Screen rendering helpers ──
-def draw_border(stdscr, y1, x1, y2, x2, color=0):
-    """Draw a box border."""
+def get_container_stats():
+    """Get CPU/RAM stats for all running containers via docker stats --no-stream."""
+    stats = {}
+    rc, out, err = run("docker stats --no-stream --format '{{.Name}}\\t{{.CPUPerc}}\\t{{.MemUsage}}\\t{{.MemPerc}}'")
+    if rc == 0:
+        for line in out.splitlines():
+            parts = line.split("\t")
+            if len(parts) >= 4:
+                name = parts[0].strip()
+                stats[name] = {
+                    "cpu": parts[1].strip(),
+                    "mem_usage": parts[2].strip(),
+                    "mem_perc": parts[3].strip(),
+                }
+    return stats
+
+def get_container_uptime():
+    """Get uptime for all running containers via docker ps --format."""
+    uptimes = {}
+    rc, out, err = run("docker ps --format '{{.Names}}\\t{{.Status}}'")
+    if rc == 0:
+        for line in out.splitlines():
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                name = parts[0].strip()
+                status = parts[1].strip()
+                # Extract uptime from status like "Up 3 hours" or "Up 2 minutes"
+                match = re.search(r"Up\s+(.+)", status)
+                if match:
+                    uptimes[name] = match.group(1).strip()
+                else:
+                    uptimes[name] = status
+    return uptimes
+
+def get_short_model(model):
+    """Shorten model name for display."""
+    if not model or model == "unknown" or model == "—":
+        return "—"
+    # Remove provider prefix
+    if "/" in model:
+        return model.split("/", 1)[1]
+    return model[:20]
+
+def get_system_info():
+    """Get basic system info (uptime, load, total memory)."""
+    info = {"uptime": "", "load": "", "mem_total": "", "mem_used": ""}
+    try:
+        rc, out, err = run("uptime")
+        if rc == 0:
+            # Parse: 18:50:25 up 5 days, 3:22, 1 user, load average: 0.52, 0.58, 0.59
+            parts = out.strip().split(",", 1)[0]
+            info["uptime"] = parts.split("up", 1)[1].strip() if "up" in parts else ""
+            # Load average
+            load_match = re.search(r"load average:\s+([\d.]+)", out)
+            if load_match:
+                info["load"] = load_match.group(1)
+    except Exception:
+        pass
+    try:
+        with open("/proc/meminfo") as f:
+            mem = {}
+            for line in f:
+                key, val = line.split(":")
+                mem[key.strip()] = int(val.strip().split()[0])  # in kB
+            total = mem.get("MemTotal", 0)
+            avail = mem.get("MemAvailable", total)
+            used = total - avail
+            info["mem_total"] = f"{total // 1024}MB"
+            info["mem_used"] = f"{used // 1024}MB ({used * 100 // max(total, 1)}%)"
+    except Exception:
+        info["mem_total"] = "N/A"
+        info["mem_used"] = "N/A"
+    return info
+
+# ── Arcane box-drawing helpers ──
+BOX = {
+    "tl": "\u2554", "tr": "\u2557", "bl": "\u255a", "br": "\u255d",
+    "h":  "\u2550", "v":  "\u2551",
+    "lt": "\u2560", "rt": "\u2563", "tt": "\u2566", "bt": "\u2569",
+}
+
+def draw_arcane_box(stdscr, y1, x1, y2, x2, color=0):
+    """Draw a box with double-line Arcane-style borders."""
     h, w = stdscr.getmaxyx()
-    if y2 >= h or x2 >= w:
+    if y2 >= h or x2 >= w or y1 > y2 or x1 > x2:
         return
-    for x in range(x1, min(x2, w)):
+    for x in range(x1 + 1, min(x2, w)):
         try:
-            stdscr.addch(y1, x, curses.ACS_HLINE, color)
-            stdscr.addch(y2, x, curses.ACS_HLINE, color)
+            stdscr.addch(y1, x, BOX["h"], color)
+            stdscr.addch(y2, x, BOX["h"], color)
         except curses.error:
             pass
-    for y in range(y1, min(y2 + 1, h)):
+    for y in range(y1 + 1, min(y2, h)):
         try:
-            stdscr.addch(y, x1, curses.ACS_VLINE, color)
-            stdscr.addch(y, x2, curses.ACS_VLINE, color)
+            stdscr.addch(y, x1, BOX["v"], color)
+            stdscr.addch(y, x2, BOX["v"], color)
         except curses.error:
             pass
     try:
-        stdscr.addch(y1, x1, curses.ACS_ULCORNER, color)
-        stdscr.addch(y1, x2, curses.ACS_URCORNER, color)
-        stdscr.addch(y2, x1, curses.ACS_LLCORNER, color)
-        stdscr.addch(y2, x2, curses.ACS_LRCORNER, color)
+        stdscr.addch(y1, x1, BOX["tl"], color)
+        stdscr.addch(y1, x2, BOX["tr"], color)
+        stdscr.addch(y2, x1, BOX["bl"], color)
+        stdscr.addch(y2, x2, BOX["br"], color)
     except curses.error:
         pass
 
-def draw_text(stdscr, y, x, text, color=0, bold=False):
+def draw_panel_title(stdscr, y, x, title, color=0):
+    """Draw a panel title with background fill."""
+    h, w = stdscr.getmaxyx()
+    end_x = w - 2
+    title_str = f" {title} "
+    fill = " " * max(0, end_x - x - len(title_str))
+    try:
+        stdscr.addnstr(y, x, title_str + fill, end_x - x, color)
+    except curses.error:
+        pass
+
+def draw_text(stdscr, y, x, text, color=0, bold=False, max_len=None):
     """Draw text safely."""
+    if max_len is None:
+        max_len = 400
     try:
         attr = color
         if bold:
             attr |= curses.A_BOLD
-        stdscr.addnstr(y, x, text, 200, attr)
+        stdscr.addnstr(y, x, text, max_len, attr)
     except curses.error:
         pass
+
+def center_text(text, width):
+    """Return (x_pos) to center text in given width."""
+    return max(0, (width - len(text)) // 2)
 
 # ── Main TUI ──
 class HermesTUI:
@@ -152,6 +255,7 @@ class HermesTUI:
             ("5", "Restart Agent", self.restart_agent),
             ("6", "Test API / Flowwink", self.test_api),
             ("7", "Environment Config", self.edit_env),
+            ("8", "Chat with Agent", self.chat_agent),
             ("q", "Quit", None),
         ]
 
@@ -193,11 +297,13 @@ class HermesTUI:
                 self.test_api()
             elif key == ord('7'):
                 self.edit_env()
+            elif key == ord('8'):
+                self.chat_agent()
 
     def draw_header(self):
         h, w = self.stdscr.getmaxyx()
         title = " HERMES MULTI-AGENT TUI "
-        draw_border(self.stdscr, 0, 0, 2, w - 1, curses.color_pair(6) | curses.A_BOLD)
+        draw_arcane_box(self.stdscr, 0, 0, 2, w - 1, curses.color_pair(6) | curses.A_BOLD)
         draw_text(self.stdscr, 1, (w - len(title)) // 2, title,
                   curses.color_pair(6) | curses.A_BOLD)
 
@@ -215,7 +321,7 @@ class HermesTUI:
     def draw_footer(self):
         h, w = self.stdscr.getmaxyx()
         footer = " ↑↓ Navigate | Enter Select | R Refresh | Q Quit "
-        draw_border(self.stdscr, h - 3, 0, h - 1, w - 1, curses.color_pair(6))
+        draw_arcane_box(self.stdscr, h - 3, 0, h - 1, w - 1, curses.color_pair(6))
         draw_text(self.stdscr, h - 2, (w - len(footer)) // 2, footer,
                   curses.color_pair(6))
 
@@ -229,58 +335,198 @@ class HermesTUI:
             self.stdscr.timeout(3000)
 
     def show_dashboard(self):
-        """Show live status of all agents."""
-        self.stdscr.erase()
-        h, w = self.stdscr.getmaxyx()
-        draw_text(self.stdscr, 1, 2, " AGENT STATUS ", curses.color_pair(6) | curses.A_BOLD)
-        draw_border(self.stdscr, 0, 0, 4, w - 1, curses.color_pair(6))
+        """Arcane-style live dashboard with auto-refresh."""
+        self.stdscr.nodelay(True)
+        self.stdscr.timeout(100)
+        tick = 0
 
-        y = 6
-        for name, info in AGENTS.items():
-            status, model = check_agent_health(name, info["port"])
-            color = curses.color_pair(info["color"])
+        try:
+            while True:
+                tick += 1
+                self.stdscr.erase()
+                h, w = self.stdscr.getmaxyx()
+                if h < 15 or w < 60:
+                    draw_text(self.stdscr, h // 2, 2, "Terminal too small. Resize.", curses.color_pair(5))
+                    self.stdscr.refresh()
+                    key = self.stdscr.getch()
+                    if key in (ord('q'), ord('Q'), 27):
+                        break
+                    continue
 
-            # Get container status
-            _, ps_out, _ = docker_compose(f"ps --format '{{{{.Name}}}}\t{{{{.Status}}}}' 2>/dev/null")
-            container_status = "not found"
-            for line in ps_out.splitlines():
-                if name in line.lower():
-                    container_status = line.split("\t")[-1] if "\t" in line else line.split(None, 1)[-1]
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                # ── Header bar ──
+                title = f" \U0001f3db\ufe0f HERMES COMMAND CENTER  |  v{VERSION}  |  {now} "
+                draw_arcane_box(self.stdscr, 0, 0, 2, w - 1, curses.color_pair(6) | curses.A_BOLD)
+                draw_text(self.stdscr, 1, center_text(title, w), title,
+                          curses.color_pair(6) | curses.A_BOLD)
+
+                # ── System info bar ──
+                if tick % 10 == 1:
+                    self._sys_info = get_system_info()
+                sys_info = getattr(self, '_sys_info', {})
+                sys_line = f" System: {sys_info.get('uptime', 'N/A')} | Mem: {sys_info.get('mem_used', 'N/A')} / {sys_info.get('mem_total', 'N/A')}"
+                if sys_info.get('load'):
+                    sys_line += f" | Load: {sys_info['load']}"
+                draw_arcane_box(self.stdscr, 3, 0, 4, w - 1, curses.color_pair(10))
+                draw_text(self.stdscr, 3, 2, " SYSTEM ", curses.color_pair(10) | curses.A_BOLD)
+                draw_text(self.stdscr, 4, 2, sys_line, curses.color_pair(10))
+
+                # ── Collect agent data ──
+                if tick % 6 == 1:
+                    self._container_stats = get_container_stats()
+                    self._container_uptime = get_container_uptime()
+                    self._agent_health = {}
+                    for name, info in AGENTS.items():
+                        s, m = check_agent_health(name, info["port"])
+                        self._agent_health[name] = (s, m)
+
+                container_stats = getattr(self, '_container_stats', {})
+                container_uptime = getattr(self, '_container_uptime', {})
+                agent_health = getattr(self, '_agent_health', {})
+
+                # ── Agent panel ──
+                panel_top = 6
+                panel_bottom = panel_top + 2 + len(AGENTS) + 2
+                if panel_bottom > h - 5:
+                    panel_bottom = h - 5
+                draw_arcane_box(self.stdscr, panel_top, 0, panel_bottom, w - 1, curses.color_pair(11))
+                draw_panel_title(self.stdscr, panel_top, 2, " AGENTS ", curses.color_pair(11) | curses.A_BOLD)
+
+                # Table header
+                hdr_y = panel_top + 1
+                hdr = f"{'STATUS':<8}{'NAME':<12}{'DOMAIN':<28}{'MODEL':<18}{'PORT':<7}{'CPU':<7}{'MEM':<10}{'UPTIME'}"
+                draw_text(self.stdscr, hdr_y, 2, hdr, curses.color_pair(9) | curses.A_BOLD, max_len=w - 3)
+
+                # Separator
+                draw_text(self.stdscr, hdr_y + 1, 2, "\u2550" * (w - 4), curses.color_pair(11))
+
+                # Agent rows
+                row_y = hdr_y + 2
+                for name, info in AGENTS.items():
+                    if row_y >= panel_bottom - 1:
+                        break
+                    color = curses.color_pair(info["color"])
+                    status, model = agent_health.get(name, ("checking", ""))
+                    is_healthy = status == "healthy"
+                    dot = "\u25cf" if is_healthy else "\u25cb"
+                    status_text = f"{dot} UP" if is_healthy else f"{dot} DOWN"
+
+                    cname = f"hermes-{name}"
+                    cstats = container_stats.get(cname, {})
+                    cpu = cstats.get("cpu", "N/A")
+                    mem = cstats.get("mem_perc", "N/A")
+                    uptime = container_uptime.get(cname, "\u2014")
+
+                    short_model = get_short_model(model)
+                    domain = info["domain"]
+
+                    row = f"{status_text:<8}{name.upper():<12}{domain:<28}{short_model:<18}{info['port']:<7}{cpu:<7}{mem:<10}{uptime}"
+                    draw_text(self.stdscr, row_y, 2, row, color, max_len=w - 3)
+                    row_y += 1
+
+                # ── Domain panel ──
+                dom_top = panel_bottom
+                dom_bottom = dom_top + 5
+                if dom_bottom > h - 4:
+                    dom_bottom = h - 4
+                draw_arcane_box(self.stdscr, dom_top, 0, dom_bottom, w - 1, curses.color_pair(10))
+                draw_panel_title(self.stdscr, dom_top, 2, " DOMAINS ", curses.color_pair(10) | curses.A_BOLD)
+
+                dom_y = dom_top + 1
+                global_model = get_env_value("HERMES_MODEL") or "not set"
+                draw_text(self.stdscr, dom_y, 4, f"Global model: {global_model}", curses.color_pair(10))
+                draw_text(self.stdscr, dom_y + 1, 4, f"Config:   {ENV_FILE}", curses.color_pair(10))
+                draw_text(self.stdscr, dom_y + 2, 4, f"Compose:  {COMPOSE_FILE}", curses.color_pair(10))
+
+                # ── Bottom action bar ──
+                action_y = h - 3
+                draw_arcane_box(self.stdscr, action_y, 0, h - 1, w - 1, curses.color_pair(6))
+                actions = " [1] Dashboard  [2] Update  [3] Model  [4] Logs  [5] Restart  [6] Test  [7] Config  [8] Chat  [R] Refresh  [Q] Quit "
+                draw_text(self.stdscr, action_y, center_text(actions, w), actions, curses.color_pair(6))
+
+                self.stdscr.refresh()
+
+                # Input handling (non-blocking)
+                key = self.stdscr.getch()
+                if key in (ord('q'), ord('Q'), 27):
                     break
+                elif key in (ord('r'), ord('R')):
+                    tick = 100
+                elif key == ord('1'):
+                    tick = 100
+                elif key == ord('2'):
+                    self._leave_dashboard()
+                    self.update_agents()
+                    self._enter_dashboard()
+                    tick = 100
+                elif key == ord('3'):
+                    self._leave_dashboard()
+                    self.change_model()
+                    self._enter_dashboard()
+                    tick = 100
+                elif key == ord('4'):
+                    self._leave_dashboard()
+                    self.view_logs()
+                    self._enter_dashboard()
+                    tick = 100
+                elif key == ord('5'):
+                    self._leave_dashboard()
+                    self.restart_agent()
+                    self._enter_dashboard()
+                    tick = 100
+                elif key == ord('6'):
+                    self._leave_dashboard()
+                    self.test_api()
+                    self._enter_dashboard()
+                    tick = 100
+                elif key == ord('7'):
+                    self._leave_dashboard()
+                    self.edit_env()
+                    self._enter_dashboard()
+                    tick = 100
+                elif key == ord('8'):
+                    self._leave_dashboard()
+                    self.chat_agent()
+                    self._enter_dashboard()
+                    tick = 100
+        finally:
+            # Restore curses state for run() menu loop
+            self.stdscr.nodelay(False)
+            self.stdscr.timeout(3000)
 
-            draw_text(self.stdscr, y, 2, f" {info['emoji']} {name.upper()}", color | curses.A_BOLD)
-            draw_text(self.stdscr, y + 1, 4, f"API:      {status}")
-            draw_text(self.stdscr, y + 1, 25, f"Model:    {model or '—'}")
-            draw_text(self.stdscr, y + 2, 4, f"Port:     {info['port']}")
-            draw_text(self.stdscr, y + 2, 25, f"Status:   {container_status}")
-            y += 4
-
-        # Show current model from .env
-        model = get_env_value("HERMES_MODEL")
-        if model:
-            draw_text(self.stdscr, y + 1, 2, f" Global model: {model}", curses.A_BOLD)
-
-        draw_text(self.stdscr, h - 4, 2, "Press any key to return...")
-        self.stdscr.refresh()
+    def _leave_dashboard(self):
+        """Temporarily leave dashboard loop."""
         self.stdscr.nodelay(False)
-        self.stdscr.getch()
+        self.stdscr.timeout(-1)
+
+    def _enter_dashboard(self):
+        """Re-enter dashboard loop mode."""
+        self.stdscr.nodelay(True)
+        self.stdscr.timeout(100)
 
     def update_agents(self):
         """Pull latest images and rebuild."""
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
+        if h < 15 or w < 40:
+            draw_text(self.stdscr, 2, 2, "Terminal too small.", curses.color_pair(5))
+            self.stdscr.refresh()
+            self.stdscr.getch()
+            return
+
         draw_text(self.stdscr, 1, 2, " UPDATING ALL AGENTS ", curses.color_pair(6) | curses.A_BOLD)
-        draw_border(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
 
         draw_text(self.stdscr, 5, 2, "Pulling latest images...")
         self.stdscr.refresh()
         rc, out, err = docker_compose("pull")
-        draw_text(self.stdscr, 6, 2, out[-200:] if out else err[-200:] if err else "Done")
+        draw_text(self.stdscr, 6, 2, (out[-200:] if out else err[-200:] if err else "Done"), max_len=w - 3)
 
         draw_text(self.stdscr, 8, 2, "Rebuilding and restarting...")
         self.stdscr.refresh()
         rc, out, err = docker_compose("up -d --build")
-        draw_text(self.stdscr, 9, 2, out[-200:] if out else err[-200:] if err else "Done")
+        draw_text(self.stdscr, 9, 2, (out[-200:] if out else err[-200:] if err else "Done"), max_len=w - 3)
 
         draw_text(self.stdscr, 12, 2, f"Return code: {rc}", curses.A_BOLD)
         draw_text(self.stdscr, 14, 2, "Press any key to return...")
@@ -291,12 +537,17 @@ class HermesTUI:
         """Change the HERMES_MODEL for all agents."""
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
+        if h < 20 or w < 50:
+            draw_text(self.stdscr, 2, 2, "Terminal too small.", curses.color_pair(5))
+            self.stdscr.refresh()
+            self.stdscr.getch()
+            return
+
         draw_text(self.stdscr, 1, 2, " CHANGE MODEL ", curses.color_pair(6) | curses.A_BOLD)
-        draw_border(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
 
         current = get_env_value("HERMES_MODEL") or "not set"
         draw_text(self.stdscr, 5, 2, f"Current model: {current}")
-        draw_text(self.stdscr, 6, 2, "")
         draw_text(self.stdscr, 7, 2, "Available models:")
         models = [
             "openai/gpt-4o-mini",
@@ -309,10 +560,11 @@ class HermesTUI:
             "anthropic/claude-3-5-haiku-20241022",
         ]
         for i, m in enumerate(models):
-            marker = "→" if m == current else " "
+            marker = "\u2192" if m == current else " "
             draw_text(self.stdscr, 9 + i, 4, f"{marker} {i + 1}. {m}")
 
-        draw_text(self.stdscr, 18, 2, "Select number (or 'c' for custom): ")
+        prompt_y = 18
+        draw_text(self.stdscr, prompt_y, 2, "Select number (or 'c' for custom): ")
         self.stdscr.refresh()
 
         curses.echo()
@@ -322,9 +574,9 @@ class HermesTUI:
             if 49 <= ch <= 56:  # 1-8
                 new_model = models[ch - 49]
             elif ch in (ord('c'), ord('C')):
-                draw_text(self.stdscr, 19, 2, "Enter model (provider/name): ")
+                draw_text(self.stdscr, prompt_y + 1, 2, "Enter model (provider/name): ")
                 self.stdscr.refresh()
-                new_model = self.stdscr.getstr(19, 35, 60).decode().strip()
+                new_model = self.stdscr.getstr(prompt_y + 1, 35, 60).decode().strip()
             else:
                 return
         finally:
@@ -335,11 +587,11 @@ class HermesTUI:
             return
 
         set_env_value("HERMES_MODEL", new_model)
-        draw_text(self.stdscr, 20, 2, f"Model changed to: {new_model}")
-        draw_text(self.stdscr, 21, 2, "Restarting all agents...")
+        draw_text(self.stdscr, prompt_y + 2, 2, f"Model changed to: {new_model}")
+        draw_text(self.stdscr, prompt_y + 3, 2, "Restarting all agents...")
         self.stdscr.refresh()
         docker_compose("restart")
-        draw_text(self.stdscr, 22, 2, "Done. Press any key to return...")
+        draw_text(self.stdscr, prompt_y + 4, 2, "Done. Press any key to return...")
         self.stdscr.refresh()
         self.stdscr.getch()
 
@@ -348,7 +600,7 @@ class HermesTUI:
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
         draw_text(self.stdscr, 1, 2, " VIEW LOGS ", curses.color_pair(6) | curses.A_BOLD)
-        draw_border(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
 
         draw_text(self.stdscr, 5, 2, "Select agent:")
         draw_text(self.stdscr, 6, 4, "1. customer")
@@ -365,9 +617,9 @@ class HermesTUI:
 
         agent_map = {ord('1'): 'hermes-customer', ord('2'): 'hermes-operator',
                      ord('3'): 'hermes-supplier', ord('4'): ''}
-        agent = agent_map.get(ch)
-        if not agent and ch not in agent_map:
+        if ch not in agent_map:
             return
+        agent = agent_map[ch]
 
         self.stdscr.erase()
         draw_text(self.stdscr, 0, 0, f" LOGS: {agent or 'all'} (q=quit) ", curses.color_pair(6) | curses.A_BOLD)
@@ -419,7 +671,7 @@ class HermesTUI:
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
         draw_text(self.stdscr, 1, 2, " RESTART AGENT ", curses.color_pair(6) | curses.A_BOLD)
-        draw_border(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
 
         draw_text(self.stdscr, 5, 2, "Select agent:")
         for i, name in enumerate(AGENTS.keys(), 1):
@@ -460,13 +712,22 @@ class HermesTUI:
         """Test API connectivity and Flowwink MCP."""
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
+        if h < 10 or w < 40:
+            draw_text(self.stdscr, 2, 2, "Terminal too small.", curses.color_pair(5))
+            self.stdscr.refresh()
+            self.stdscr.getch()
+            return
+
         draw_text(self.stdscr, 1, 2, " API / FLOWWINK TEST ", curses.color_pair(6) | curses.A_BOLD)
-        draw_border(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
 
         y = 5
+        max_y = h - 4
 
         # Test each agent's API
         for name, info in AGENTS.items():
+            if y >= max_y:
+                break
             token = get_env_value(f"HERMES_{name.upper()}_TOKEN")
             status, model = check_agent_health(name, info["port"])
 
@@ -475,47 +736,47 @@ class HermesTUI:
             draw_text(self.stdscr, y, 20, f"Status: {status}")
             y += 1
 
-            if token:
+            if token and y < max_y:
                 draw_text(self.stdscr, y, 4, f"Token: {token[:20]}...")
                 y += 1
 
             # Try a real API call
-            if status == "healthy":
+            if status == "healthy" and y < max_y:
                 try:
                     url = f"http://127.0.0.1:{info['port']}/api/status?token={token}"
                     req = urllib.request.Request(url)
                     with urllib.request.urlopen(req, timeout=5) as resp:
                         data = json.loads(resp.read())
-                        draw_text(self.stdscr, y, 4, f"API OK — Model: {data.get('model', '?')}")
+                        draw_text(self.stdscr, y, 4, f"API OK -- Model: {data.get('model', '?')}")
                 except Exception as e:
                     draw_text(self.stdscr, y, 4, f"API Error: {str(e)[:50]}")
-                y += 2
+                y += 1
 
         # Test Flowwink MCP
-        y += 1
-        draw_text(self.stdscr, y, 2, " FLOWWINK MCP ", curses.A_BOLD)
-        y += 1
-        fw_key = get_env_value("FLOWWINK_API_KEY")
-        if fw_key:
-            draw_text(self.stdscr, y, 4, f"Key: {fw_key[:20]}...")
+        if y < max_y:
             y += 1
-            # Try operator's Flowwink connection
-            op_token = get_env_value("HERMES_OPERATOR_TOKEN")
-            try:
-                url = f"http://127.0.0.1:3002/api/status?token={op_token}"
-                req = urllib.request.Request(url)
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    data = json.loads(resp.read())
-                    draw_text(self.stdscr, y, 4, f"Operator API: OK")
-            except Exception as e:
-                draw_text(self.stdscr, y, 4, f"Operator API: {str(e)[:50]}")
+            draw_text(self.stdscr, min(y, max_y - 1), 2, " FLOWWINK MCP ", curses.A_BOLD)
             y += 1
-            draw_text(self.stdscr, y, 4, "Note: Flowwink MCP is configured in operator/config.yaml")
-            draw_text(self.stdscr, y + 1, 4, "Test MCP via operator dashboard: https://operator.yourdomain.com")
-        else:
-            draw_text(self.stdscr, y, 4, "No FLOWWINK_API_KEY configured")
+            fw_key = get_env_value("FLOWWINK_API_KEY")
+            if fw_key and y < max_y:
+                draw_text(self.stdscr, y, 4, f"Key: {fw_key[:20]}...")
+                y += 1
+                if y < max_y:
+                    op_token = get_env_value("HERMES_OPERATOR_TOKEN")
+                    try:
+                        url = f"http://127.0.0.1:3002/api/status?token={op_token}"
+                        req = urllib.request.Request(url)
+                        with urllib.request.urlopen(req, timeout=5) as resp:
+                            data = json.loads(resp.read())
+                            draw_text(self.stdscr, y, 4, "Operator API: OK")
+                    except Exception as e:
+                        draw_text(self.stdscr, y, 4, f"Operator API: {str(e)[:50]}")
+                    y += 1
+            elif y < max_y:
+                draw_text(self.stdscr, y, 4, "No FLOWWINK_API_KEY configured")
+                y += 1
 
-        draw_text(self.stdscr, h - 4, 2, "Press any key to return...")
+        draw_text(self.stdscr, h - 3, 2, "Press any key to return...")
         self.stdscr.refresh()
         self.stdscr.getch()
 
@@ -523,13 +784,17 @@ class HermesTUI:
         """View and edit environment variables."""
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
+        if h < 10 or w < 40:
+            draw_text(self.stdscr, 2, 2, "Terminal too small.", curses.color_pair(5))
+            self.stdscr.refresh()
+            self.stdscr.getch()
+            return
+
         draw_text(self.stdscr, 1, 2, " ENVIRONMENT CONFIG ", curses.color_pair(6) | curses.A_BOLD)
-        draw_border(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
 
-        y = 5
-        draw_text(self.stdscr, y, 2, f"File: {ENV_FILE}")
-        y += 2
-
+        # Read env vars first
+        env_vars = []
         try:
             with open(ENV_FILE) as f:
                 for line in f:
@@ -537,21 +802,126 @@ class HermesTUI:
                     if line and not line.startswith("#"):
                         key = line.split("=", 1)[0]
                         val = line.split("=", 1)[1] if "=" in line else ""
-                        # Mask sensitive values
                         if "KEY" in key or "TOKEN" in key or "SECRET" in key:
                             display_val = val[:8] + "..." + val[-4:] if len(val) > 12 else "***"
                         else:
                             display_val = val
-                        draw_text(self.stdscr, y, 4, f"{key}={display_val}")
-                        y += 1
+                        env_vars.append(f"{key}={display_val}")
         except FileNotFoundError:
-            draw_text(self.stdscr, y, 2, f"File not found: {ENV_FILE}")
+            env_vars = [f"File not found: {ENV_FILE}"]
 
-        draw_text(self.stdscr, y + 2, 2, "To edit: nano /opt/hermesstack/.env")
-        draw_text(self.stdscr, y + 3, 2, "Then restart: docker compose -f deploy/vps/docker-compose.vps.yml restart")
-        draw_text(self.stdscr, h - 4, 2, "Press any key to return...")
-        self.stdscr.refresh()
-        self.stdscr.getch()
+        # Scrollable display
+        max_lines = h - 8
+        offset = 0
+
+        while True:
+            self.stdscr.erase()
+            draw_text(self.stdscr, 1, 2, " ENVIRONMENT CONFIG ", curses.color_pair(6) | curses.A_BOLD)
+            draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+            draw_text(self.stdscr, 4, 2, f"File: {ENV_FILE}", curses.A_DIM)
+
+            y = 5
+            for i in range(offset, min(offset + max_lines, len(env_vars))):
+                if y >= h - 4:
+                    break
+                draw_text(self.stdscr, y, 4, env_vars[i], max_len=w - 5)
+                y += 1
+
+            scroll_info = f"[{offset + 1}-{min(offset + max_lines, len(env_vars))}/{len(env_vars)}] ↑↓ scroll | q quit"
+            draw_text(self.stdscr, h - 3, 2, scroll_info, curses.color_pair(6))
+            draw_text(self.stdscr, h - 2, 2, f"To edit: nano {ENV_FILE}", curses.A_DIM)
+            self.stdscr.refresh()
+
+            key = self.stdscr.getch()
+            if key in (ord('q'), ord('Q')):
+                break
+            elif key == curses.KEY_DOWN and offset < max(0, len(env_vars) - max_lines):
+                offset += 1
+            elif key == curses.KEY_UP and offset > 0:
+                offset -= 1
+            elif key == curses.KEY_NPAGE:
+                offset = min(len(env_vars) - max_lines, offset + max_lines)
+            elif key == curses.KEY_PPAGE:
+                offset = max(0, offset - max_lines)
+
+    def chat_agent(self):
+        """Chat with the Hermes operator agent via CLI."""
+        self.stdscr.erase()
+        h, w = self.stdscr.getmaxyx()
+        if h < 15 or w < 60:
+            draw_text(self.stdscr, 2, 2, "Terminal too small.", curses.color_pair(5))
+            self.stdscr.refresh()
+            self.stdscr.getch()
+            return
+
+        draw_text(self.stdscr, 1, 2, " CHAT WITH OPERATOR AGENT ", curses.color_pair(6) | curses.A_BOLD)
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_text(self.stdscr, 4, 2, "Type your message (or 'q' to quit):", curses.color_pair(6))
+
+        curses.echo()
+        curses.curs_set(1)
+
+        try:
+            while True:
+                draw_text(self.stdscr, 5, 2, "> " + " " * (w - 5), 0)
+                draw_text(self.stdscr, 5, 4, "", 0)
+                self.stdscr.refresh()
+
+                try:
+                    input_bytes = self.stdscr.getstr(5, 4, w - 10)
+                    user_input = input_bytes.decode().strip()
+                except Exception:
+                    break
+
+                if not user_input:
+                    continue
+                if user_input.lower() in ('q', 'quit'):
+                    break
+
+                # Show "thinking" indicator
+                draw_text(self.stdscr, 7, 2, "Agent is thinking...", curses.color_pair(3) | curses.A_BOLD)
+                self.stdscr.refresh()
+
+                # Call the Hermes CLI
+                cmd = f"docker exec hermes-operator python -m hermes_cli.main chat -q '{user_input}' -Q --provider openai -m gpt-4o-mini"
+                rc, out, err = run(cmd, timeout=60)
+
+                # Clear thinking and show response
+                self.stdscr.erase()
+                draw_text(self.stdscr, 1, 2, " CHAT WITH OPERATOR AGENT ", curses.color_pair(6) | curses.A_BOLD)
+                draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+                draw_text(self.stdscr, 4, 2, f"You: {user_input}", curses.color_pair(2))
+                draw_text(self.stdscr, 6, 2, "Agent:", curses.color_pair(3) | curses.A_BOLD)
+
+                response = out.strip() or err.strip() or "No response received."
+                # Word wrap the response
+                y = 6
+                words = response.split()
+                line = "  "
+                for word in words:
+                    if len(line) + len(word) + 1 > w - 4:
+                        draw_text(self.stdscr, y, 2, line, max_len=w - 3)
+                        y += 1
+                        line = "  " + word
+                    else:
+                        line += " " + word if line.strip() else word
+                if line.strip():
+                    draw_text(self.stdscr, y, 2, line, max_len=w - 3)
+                    y += 1
+
+                draw_text(self.stdscr, h - 3, 2, "Press any key to continue chatting...", curses.color_pair(6))
+                self.stdscr.refresh()
+                self.stdscr.getch()
+
+                # Clear screen for next message
+                self.stdscr.erase()
+                draw_text(self.stdscr, 1, 2, " CHAT WITH OPERATOR AGENT ", curses.color_pair(6) | curses.A_BOLD)
+                draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+                draw_text(self.stdscr, 4, 2, "Type your message (or 'q' to quit):", curses.color_pair(6))
+
+        finally:
+            curses.noecho()
+            curses.curs_set(0)
 
 
 def main(stdscr):
@@ -561,10 +931,16 @@ def main(stdscr):
 
 if __name__ == "__main__":
     # Parse CLI args
-    for i, arg in enumerate(sys.argv[1:], 1):
-        if arg == "--env-file" and i < len(sys.argv):
+    i = 1
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == "--env-file" and i + 1 < len(sys.argv):
             ENV_FILE = sys.argv[i + 1]
-        elif arg == "--compose" and i < len(sys.argv):
+            i += 2
+        elif arg == "--compose" and i + 1 < len(sys.argv):
             COMPOSE_FILE = sys.argv[i + 1]
+            i += 2
+        else:
+            i += 1
 
     curses.wrapper(main)
