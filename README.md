@@ -156,12 +156,12 @@ The profiles use Hermes' custom OpenAI-compatible provider format:
 model:
   provider: custom
   default: autoversio
-  base_url: https://code4.autoversio.ai/v1
+  base_url: https://api.localhost.ai/v1
   api_mode: chat_completions
 
 custom_providers:
-  - name: code4
-    base_url: https://code4.autoversio.ai/v1
+  - name: localhost
+    base_url: https://api.localhost.ai/v1
     key_env: OPENAI_API_KEY
     api_mode: chat_completions
     model: autoversio
