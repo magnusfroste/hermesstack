@@ -32,12 +32,10 @@ def agent_block(profile: str, inst: dict) -> str:
         f"    restart: unless-stopped",
         f"    environment:",
         f"      - HERMES_HOME=/data/hermes-profiles/{profile}",
-        f"      - HERMES_MODEL=${{HERMES_MODEL:-llama-3-8b}}",
+        f"      - HERMES_MODEL=${{HERMES_MODEL:-gpt-4.1}}",
         f"      - OPENAI_API_KEY=${{OPENAI_API_KEY}}",
         f"      - ANTHROPIC_API_KEY=${{ANTHROPIC_API_KEY}}",
     ]
-    if profile == "operator":
-        block.append(f"      - FLOWWINK_API_KEY=${{FLOWWINK_API_KEY}}")
     block += [
         f"      - PROFILE_ROLE={profile}",
         f"      - {token_var}=${{{token_var}}}",
@@ -108,9 +106,10 @@ def main():
     lines.append('    command: ["python", "/app/hermes-web.py"]')
     lines.append("    networks:")
     lines.append("      - hermes-network")
-    lines.append("    depends_on:")
-    for p in profile_names:
-        lines.append(f"      - hermes-{p}")
+    if profile_names:
+        lines.append("    depends_on:")
+        for p in profile_names:
+            lines.append(f"      - hermes-{p}")
 
     # volumes
     lines.append("")

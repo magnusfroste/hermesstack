@@ -115,8 +115,8 @@ sudo caddy reload           # after editing config/Caddyfile
 ### .env (root)
 ```env
 OPENAI_API_KEY=sk-…
-HERMES_MODEL=llama-3-8b
-LLM_BASE_URL=https://api.localhost.ai/v1
+HERMES_MODEL=gpt-4.1
+LLM_BASE_URL=https://api.openai.com/v1
 FLOWWINK_API_KEY=fwk_…        # optional, for MCP
 HERMES_OPERATOR_TOKEN=…        # auto-generated
 HERMES_LOG_LEVEL=info
@@ -136,18 +136,18 @@ The profiles use Hermes' custom OpenAI-compatible provider format:
 ```yaml
 model:
   provider: custom
-  default: llama-3-8b
-  base_url: https://api.localhost.ai/v1
+  default: gpt-4.1
+  base_url: https://api.openai.com/v1
   api_mode: chat_completions
 
 custom_providers:
   - name: custom_llm
-    base_url: https://api.localhost.ai/v1
+    base_url: https://api.openai.com/v1
     key_env: OPENAI_API_KEY
     api_mode: chat_completions
-    model: llama-3-8b
+    model: gpt-4.1
     models:
-      llama-3-8b:
+      gpt-4.1:
         context_length: 128000
 ```
 
