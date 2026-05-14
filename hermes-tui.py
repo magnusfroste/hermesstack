@@ -34,22 +34,13 @@ ROOT_DIR = Path("/opt/hermeshotel")
 COLORS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2, 3, 4, 5]
 
 def load_instances():
-    """Load instances from instances.json, fallback to default."""
-    default = {
-        "instances": [
-            {"name": "customer", "label": "Customer Agent", "domain": "customer.froste.eu", "port": 3001, "container": "hermes-customer", "emoji": "\U0001f6d2", "profile": "customer", "active": True},
-            {"name": "operator", "label": "Operator Agent", "domain": "operator.froste.eu", "port": 3002, "container": "hermes-operator", "emoji": "\u2699\ufe0f", "profile": "operator", "active": True},
-            {"name": "supplier", "label": "Supplier Agent", "domain": "supplier.froste.eu", "port": 3003, "container": "hermes-supplier", "emoji": "\U0001f4e6", "profile": "supplier", "active": True},
-        ]
-    }
+    """Load instances from instances.json. Returns empty list if none exist."""
     try:
         with open(INSTANCES_FILE) as f:
             data = json.load(f)
-            return data.get("instances", default["instances"])
+            return data.get("instances", [])
     except (FileNotFoundError, json.JSONDecodeError):
-        with open(INSTANCES_FILE, "w") as f:
-            json.dump(default, f, indent=2)
-        return default["instances"]
+        return []
 
 def save_instances(instances):
     """Save instances to instances.json."""
@@ -436,6 +427,7 @@ class HermesTUI:
     def __init__(self, stdscr):
         self.stdscr = stdscr
         self.selected = 0
+        instances = load_instances()
         self.menu_items = [
             ("1", "Status Dashboard", self.show_dashboard),
             ("2", "Update All Agents", self.update_agents),
@@ -446,6 +438,10 @@ class HermesTUI:
             ("7", "Environment Config", self.edit_env),
             ("8", "Config Files", self.config_files),
             ("9", "Fleet / Images", self.fleet_panel),
+        ]
+        if not instances:
+            self.menu_items.append(("f", "Create First Hermes", self.create_first_hermes))
+        self.menu_items += [
             ("a", "Add Instance", self.add_instance),
             ("0", "Remove Instance", self.remove_instance),
             ("m", "MCP Orchestration", self.mcp_panel),
@@ -501,6 +497,8 @@ class HermesTUI:
                 self.remove_instance()
             elif key in (ord('m'), ord('M')):
                 self.mcp_panel()
+            elif key in (ord('f'), ord('F')):
+                self.create_first_hermes()
             elif key in (ord('c'), ord('C')):
                 self.chat_agent()
 
@@ -1356,29 +1354,83 @@ class HermesTUI:
         return key
 
 
+    def create_first_hermes(self):
+        """Create first Hermes instance with domain configuration."""
+        self.stdscr.erase()
+        h, w = self.stdscr.getmaxyx()
+        draw_text(self.stdscr, 1, 2, " CREATE FIRST HERMES ", curses.color_pair(6) | curses.A_BOLD)
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_text(self.stdscr, 5, 2, "No instances found. Let's set up your first Hermes agent.")
+        draw_text(self.stdscr, 6, 2, "Name (e.g. operator): ")
+        draw_text(self.stdscr, 7, 2, "Domain (e.g. operator.example.com): ")
+        self.stdscr.refresh()
+        curses.echo()
+        curses.curs_set(1)
+        try:
+            name = self.stdscr.getstr(6, 30, 20).decode().strip()
+            domain = self.stdscr.getstr(7, 40, 40).decode().strip()
+        finally:
+            curses.noecho()
+            curses.curs_set(0)
+        if not name:
+            name = "operator"
+        if not domain:
+            self.message_screen("Create First Hermes", ["Domain is required. Please try again."])
+            return
+        # Run add-hermes.sh with domain
+        add_script = "/opt/hermeshotel/scripts/add-hermes.sh"
+        if not os.path.isfile(add_script):
+            self.message_screen("Create First Hermes", [f"Script missing: {add_script}"])
+            return
+        proc = subprocess.run(
+            ["/bin/bash", add_script, name, domain],
+            capture_output=True, text=True, cwd="/opt/hermeshotel"
+        )
+        if proc.returncode != 0:
+            self.message_screen("Create First Hermes", [f"Script failed (code {proc.returncode})", proc.stderr[:300]])
+            return
+        # Reload
+        global AGENTS
+        AGENTS = get_agents()
+        self.message_screen("Create First Hermes", [
+            f"✔ hermes-{name} created!",
+            f"Domain: {domain}",
+            "",
+            "Next steps:",
+            "1. Set OPENAI_API_KEY and LLM_BASE_URL in .env",
+            "2. sudo caddy reload",
+            "3. Restart container: docker compose -f docker-compose.yml restart hermes-" + name
+        ])
+
     def add_instance(self):
         """Add a new Hermes agent from operator template using scripts/add-hermes.sh."""
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
         draw_text(self.stdscr, 1, 2, " ADD HERMES AGENT ", curses.color_pair(6) | curses.A_BOLD)
         draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
-        draw_text(self.stdscr, 5, 2, "Profile name (lowercase, letters only, e.g. sales): ")
+        draw_text(self.stdscr, 5, 2, "Profile name (lowercase, e.g. sales): ")
+        draw_text(self.stdscr, 6, 2, "Domain (e.g. sales.example.com): ")
         self.stdscr.refresh()
         curses.echo()
+        curses.curs_set(1)
         try:
-            name = self.stdscr.getstr(5, 45, 20).decode().strip()
+            name = self.stdscr.getstr(5, 40, 20).decode().strip()
+            domain = self.stdscr.getstr(6, 40, 40).decode().strip()
         finally:
             curses.noecho()
+            curses.curs_set(0)
         if not name or not name.islower() or not name.replace("_", "").isalnum():
             self.message_screen("Add Hermes", ["Invalid name. Use lowercase letters/underscores only."])
             return
-        # Run add‑hermes.sh
+        if not domain:
+            domain = f"{name}.froste.eu"
+        # Run add‑hermes.sh with domain
         add_script = "/opt/hermeshotel/scripts/add-hermes.sh"
         if not os.path.isfile(add_script):
             self.message_screen("Add Hermes", [f"Script missing: {add_script}"])
             return
         proc = subprocess.run(
-            ["/bin/bash", add_script, name],
+            ["/bin/bash", add_script, name, domain],
             capture_output=True, text=True, cwd="/opt/hermeshotel"
         )
         if proc.returncode != 0:
@@ -1387,7 +1439,7 @@ class HermesTUI:
         # Reload instances
         global AGENTS
         AGENTS = get_agents()
-        self.message_screen("Add Hermes", [f"✔ hermes-{name} added!", "", proc.stdout[:400]])
+        self.message_screen("Add Hermes", [f"✔ hermes-{name} added!", f"Domain: {domain}", "", proc.stdout[:400]])
 
     def remove_instance(self):
         """Remove or deactivate an instance from instances.json."""

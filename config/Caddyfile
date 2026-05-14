@@ -1,5 +1,9 @@
-# Hermes Multi-Agent Caddy Configuration
+# HermesHotel — Caddy Configuration
 # Placera i /etc/caddy/Caddyfile
+#
+# När du lägger till nya Hermes-instanser via TUI eller add-hermes.sh
+# uppdateras denna fil automatiskt med nya domän-block.
+# Efter ändring: sudo caddy reload
 
 {
     admin localhost:2019
@@ -34,24 +38,6 @@ hermeshotel.froste.eu {
 }
 
 # ============================================
-# CUSTOMER AGENT
-# ============================================
-customer.froste.eu {
-    import hermes_headers
-
-    reverse_proxy localhost:3001 {
-        flush_interval -1
-    }
-
-    log {
-        output file /var/log/caddy/customer-access.log {
-            roll_size 10MB
-            roll_keep 5
-        }
-    }
-}
-
-# ============================================
 # OPERATOR AGENT
 # ============================================
 operator.froste.eu {
@@ -63,24 +49,6 @@ operator.froste.eu {
 
     log {
         output file /var/log/caddy/operator-access.log {
-            roll_size 10MB
-            roll_keep 5
-        }
-    }
-}
-
-# ============================================
-# SUPPLIER AGENT
-# ============================================
-supplier.froste.eu {
-    import hermes_headers
-
-    reverse_proxy localhost:3003 {
-        flush_interval -1
-    }
-
-    log {
-        output file /var/log/caddy/supplier-access.log {
             roll_size 10MB
             roll_keep 5
         }

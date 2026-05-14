@@ -1,9 +1,11 @@
-# Hermes Operator Profile  
+# Hermes Operator Profile
 # Roll: BSS/ERP operatör med full MCP-åtkomst till Flowwink
+#
+# Edit this file or use the TUI to change settings.
+# API keys are read from environment variables — never hardcode them here.
 
 personality: bss_operator
 
-# Agentens mål och beteende
 goals:
   - "Hantera inkommande ordrar från kunder"
   - "Bevaka lagerstatus och lagerhållning"
@@ -11,14 +13,12 @@ goals:
   - "Fakturera kunder"
   - "Hantera kundrelationer och support"
 
-# Kontext för agenten
 context:
   role: "operator"
   behavior: |
-    Du är operatör för ett BSS/ERP-system (Business Support System). Du har
-    full kontroll över e-handelsplattformen och hanterar alla aspekter av
-    orderflödet.
-    
+    Du är operatör för ett BSS/ERP-system. Du har full kontroll över
+    e-handelsplattformen och hanterar alla aspekter av orderflödet.
+
     Dina ansvarsområden:
     - Ta emot och behandla kundordrar
     - Kontrollera lagerstatus via Flowwink MCP
@@ -26,23 +26,14 @@ context:
     - Generera fakturor och hantera betalningar
     - Ge kunder support och svara på frågor
     - Övervaka systemstatus och rapportera avvikelser
-    
-    Du har tillgång till 200+ MCP-ytor i Flowwink för:
-    - Produktkataloghantering
-    - Lagerhantering och inventering
-    - Orderhantering och routing
-    - Kundhantering (CRM)
-    - Fakturering och ekonomi
-    - Rapportering och analys
-    
+
     Var proaktiv, effektiv och serviceinriktad.
 
-# MCP-servrar (Flowwink integration)
 mcp_servers:
   flowwink:
-    url: https://rzhjotxffjfsdlhrdkpj.supabase.co/functions/v1/mcp-server
+    url: https://flowwink.example.com/api/mcp
     headers:
-      Authorization: Bearer fwk_36ef2653369bef8c0f0af1290ac0df760e030a351700da4e230d77b2805ae68c
+      Authorization: Bearer ${FLOWWINK_API_KEY}
     timeout: 120
     connect_timeout: 60
     tools:
@@ -53,17 +44,7 @@ mcp_servers:
         - "invoice*"
         - "inventory*"
         - "search*"
-  
-  # Intern kommunikation med andra agenter
-  customer_agent:
-    url: http://hermes-customer:3000/api
-    timeout: 30
-    
-  supplier_agent:
-    url: http://hermes-supplier:3000/api
-    timeout: 30
 
-# Aktiverade verktyg (full uppsättning för operatören)
 toolsets:
   - core
   - web_search
@@ -71,39 +52,33 @@ toolsets:
   - files
   - delegate
 
-# Visningsinställningar
 display:
   skin: default
   busy_input_mode: steer
   resume_display: full
 
-# Minnesinställningar - viktigt för att komma ihåg ordrar och kunder
 memory:
   provider: builtin
-  
-# Approvals - operatör kan behöva godkänna vissa åtgärder
+
 approvals:
   mode: ask
 
-# Logging - mer detaljerat för operatören
 logging:
-  level: DEBUG
+  level: info
   agent_file: agent.log
 
-# Dashboard-tema
 dashboard:
   theme: default
 
-# Default model / private OpenAI-compatible endpoint
 model:
   provider: custom
   default: llama-3-8b
-  base_url: https://code4.llama-3-8b.ai/v1
+  base_url: https://api.localhost.ai/v1
   api_mode: chat_completions
 
 custom_providers:
-  - name: code4
-    base_url: https://code4.llama-3-8b.ai/v1
+  - name: custom_llm
+    base_url: https://api.localhost.ai/v1
     key_env: OPENAI_API_KEY
     api_mode: chat_completions
     model: llama-3-8b
