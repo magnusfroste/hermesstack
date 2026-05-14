@@ -26,7 +26,7 @@ sudo mv lazydocker /usr/local/bin/
 
 ```bash
 # Gå till projektmappen
-cd /opt/hermesstack/deploy/vps
+cd /opt/hermeshotel
 
 # Starta lazydocker
 lazydocker
@@ -48,7 +48,7 @@ lazydocker
 ### Python-version (fancy):
 
 ```bash
-cd /opt/hermesstack/deploy/vps
+cd /opt/hermeshotel
 python3 tui_monitor.py
 ```
 
@@ -61,7 +61,7 @@ Visar:
 ### Bash-version (enkel):
 
 ```bash
-cd /opt/hermesstack/deploy/vps
+cd /opt/hermeshotel
 chmod +x monitor.sh
 ./monitor.sh
 ```
@@ -74,7 +74,7 @@ chmod +x monitor.sh
 
 ```bash
 # Klassisk docker ps med auto-refresh
-cd /opt/hermesstack/deploy/vps
+cd /opt/hermeshotel
 watch -n 2 'docker-compose ps'
 
 # Eller mer detaljerat
@@ -152,7 +152,7 @@ För äkta Arcane-vibe, använd med:
 
 ```bash
 # Övervaka allt
-cd /opt/hermesstack/deploy/vps && lazydocker
+cd /opt/hermeshotel && lazydocker
 
 # Snabb status
 docker-compose ps

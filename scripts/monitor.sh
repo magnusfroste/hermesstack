@@ -38,7 +38,7 @@ show_dashboard() {
     echo "╚══════════════════════════════════════════════════════════════════════════╝"
     echo ""
     echo "Senaste log-rad:"
-    docker-compose -f /opt/hermesstack/deploy/vps/docker-compose.vps.yml logs --tail 1 2>/dev/null | tail -1
+    docker compose -f /opt/hermeshotel/docker-compose.yml logs --tail 1 2>/dev/null | tail -1
 }
 
 # Huvudloop

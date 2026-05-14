@@ -35,16 +35,22 @@ toolsets:
   - files
   - delegate
 
-# Provider configuration
-providers:
-  openai:
-    api_key_env: OPENAI_API_KEY
-    api_mode: chat_completions
-    base_url: https://api.openai.com/v1
-    default_model: gpt-4o-mini
+# Default model / private OpenAI-compatible endpoint
+model:
+  provider: custom
+  default: autoversio
+  base_url: https://code4.autoversio.ai/v1
+  api_mode: chat_completions
 
-# Default model
-model: gpt-4o-mini
+custom_providers:
+  - name: code4
+    base_url: https://code4.autoversio.ai/v1
+    key_env: OPENAI_API_KEY
+    api_mode: chat_completions
+    model: autoversio
+    models:
+      autoversio:
+        context_length: 128000
 
 # Visningsinställningar
 display:

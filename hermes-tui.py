@@ -13,24 +13,213 @@ import curses
 import json
 import os
 import subprocess
+import shlex
 import sys
 import time
 import re
 import urllib.request
 import urllib.error
+import tempfile
+from pathlib import Path
 from datetime import datetime
 
-VERSION = "0.14.0"
+VERSION = "0.16.0"
 
 # ── Configuration ──
-COMPOSE_FILE = os.environ.get("HERMES_COMPOSE", "/opt/hermeshotel/deploy/vps/docker-compose.vps.yml")
+COMPOSE_FILE = os.environ.get("HERMES_COMPOSE", "/opt/hermeshotel/docker-compose.yml")
 ENV_FILE = os.environ.get("HERMES_ENV", "/opt/hermeshotel/.env")
+INSTANCES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instances.json")
+ROOT_DIR = Path("/opt/hermeshotel")
 
-AGENTS = {
-    "customer":  {"port": 3001, "domain": "customer.froste.eu", "color": 2,  "emoji": "\U0001f6d2"},
-    "operator":  {"port": 3002, "domain": "operator.froste.eu", "color": 3,  "emoji": "\u2699\ufe0f"},
-    "supplier":  {"port": 3003, "domain": "supplier.froste.eu", "color": 4,  "emoji": "\U0001f4e6"},
-}
+COLORS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2, 3, 4, 5]
+
+def load_instances():
+    """Load instances from instances.json, fallback to default."""
+    default = {
+        "instances": [
+            {"name": "customer", "label": "Customer Agent", "domain": "customer.froste.eu", "port": 3001, "container": "hermes-customer", "emoji": "\U0001f6d2", "profile": "customer", "active": True},
+            {"name": "operator", "label": "Operator Agent", "domain": "operator.froste.eu", "port": 3002, "container": "hermes-operator", "emoji": "\u2699\ufe0f", "profile": "operator", "active": True},
+            {"name": "supplier", "label": "Supplier Agent", "domain": "supplier.froste.eu", "port": 3003, "container": "hermes-supplier", "emoji": "\U0001f4e6", "profile": "supplier", "active": True},
+        ]
+    }
+    try:
+        with open(INSTANCES_FILE) as f:
+            data = json.load(f)
+            return data.get("instances", default["instances"])
+    except (FileNotFoundError, json.JSONDecodeError):
+        with open(INSTANCES_FILE, "w") as f:
+            json.dump(default, f, indent=2)
+        return default["instances"]
+
+def save_instances(instances):
+    """Save instances to instances.json."""
+    with open(INSTANCES_FILE, "w") as f:
+        json.dump({"instances": instances}, f, indent=2)
+
+def get_agents():
+    """Build agents dict from instances for TUI display."""
+    instances = load_instances()
+    agents = {}
+    for i, inst in enumerate(instances):
+        if not inst.get("active", True):
+            continue
+        agents[inst["name"]] = {
+            "port": inst["port"],
+            "domain": inst["domain"],
+            "container": inst.get("container", f"hermes-{inst['name']}"),
+            "emoji": inst.get("emoji", "🤖"),
+            "color": COLORS[i % len(COLORS)],
+            "label": inst.get("label", inst["name"]),
+        }
+    return agents
+
+
+def get_config_files():
+    """Return the config files that define the containerized Hermes stack."""
+    return [
+        {
+            "key": "env",
+            "label": "Global Environment",
+            "path": Path(ENV_FILE),
+            "kind": "env",
+            "restart": "all",
+            "why": "Secrets, HERMES_MODEL, Flowwink key, dashboard tokens.",
+        },
+        {
+            "key": "compose",
+            "label": "Docker Compose",
+            "path": Path(COMPOSE_FILE),
+            "kind": "yaml",
+            "restart": "recreate",
+            "why": "Official image, dashboard env vars, ports, writable config mounts.",
+        },
+        {
+            "key": "caddy",
+            "label": "Caddy Reverse Proxy",
+            "path": ROOT_DIR / "config/Caddyfile",
+            "kind": "caddy",
+            "restart": "caddy",
+            "why": "HTTPS, domains, dashboard auth headers, OPTIONS preflight.",
+        },
+        {
+            "key": "operator",
+            "label": "Operator Profile",
+            "path": ROOT_DIR / "profiles/operator/config.yaml",
+            "kind": "yaml",
+            "restart": "operator",
+            "why": "Private LLM, Flowwink MCP, operator tools and approvals.",
+        },
+        {
+            "key": "customer",
+            "label": "Customer Profile",
+            "path": ROOT_DIR / "profiles/customer/config.yaml",
+            "kind": "yaml",
+            "restart": "customer",
+            "why": "Customer persona, model endpoint, tools.",
+        },
+        {
+            "key": "supplier",
+            "label": "Supplier Profile",
+            "path": ROOT_DIR / "profiles/supplier/config.yaml",
+            "kind": "yaml",
+            "restart": "supplier",
+            "why": "Supplier persona, model endpoint, tools.",
+        },
+        {
+            "key": "instances",
+            "label": "TUI Instances",
+            "path": Path(INSTANCES_FILE),
+            "kind": "json",
+            "restart": "none",
+            "why": "Which agents/domains the TUI displays and controls.",
+        },
+        {
+            "key": "boot-doc",
+            "label": "Boot Settings Doc",
+            "path": ROOT_DIR / "docs/container-boot-settings.md",
+            "kind": "markdown",
+            "restart": "none",
+            "why": "Human map of why each container setting exists.",
+        },
+        {
+            "key": "ui-doc",
+            "label": "Official UI Doc",
+            "path": ROOT_DIR / "docs/official-ui-setup.md",
+            "kind": "markdown",
+            "restart": "none",
+            "why": "Official UI, Caddy auth, writable mount troubleshooting.",
+        },
+    ]
+
+
+def mask_secret_line(line):
+    """Mask obvious secrets for display while preserving enough context."""
+    upper = line.upper()
+    secret_markers = ("KEY", "TOKEN", "SECRET", "AUTHORIZATION: BEARER", "PASSWORD")
+    if not any(marker in upper for marker in secret_markers):
+        return line
+    if "=" in line:
+        key, val = line.split("=", 1)
+        val = val.strip()
+        if len(val) > 12:
+            return f"{key}={val[:8]}...{val[-4:]}"
+        return f"{key}=***"
+    bearer = re.search(r"(Authorization:\s*Bearer\s+)(\S+)", line, re.IGNORECASE)
+    if bearer:
+        val = bearer.group(2)
+        masked = val[:8] + "..." + val[-4:] if len(val) > 12 else "***"
+        return line[:bearer.start(2)] + masked + line[bearer.end(2):]
+    return re.sub(r"([A-Za-z0-9_\-]{12})[A-Za-z0-9_\-]+([A-Za-z0-9_\-]{4})", r"\1...\2", line)
+
+
+def validate_config_file(path, kind):
+    """Run lightweight validation for edited config files."""
+    if kind == "json":
+        try:
+            json.loads(path.read_text())
+            return True, "JSON OK"
+        except Exception as e:
+            return False, f"JSON error: {e}"
+    if kind == "yaml":
+        rc, out, err = run(f"python3 - <<'PY'\nimport sys, yaml\nwith open({shlex.quote(str(path))!r}) as f:\n    yaml.safe_load(f)\nprint('YAML OK')\nPY", timeout=10)
+        if rc == 0:
+            return True, out.strip() or "YAML OK"
+        return False, (err or out or "YAML validation failed").strip()[:300]
+    if kind == "env":
+        bad = []
+        for i, line in enumerate(path.read_text().splitlines(), 1):
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" not in stripped:
+                bad.append(str(i))
+        if bad:
+            return False, "Invalid .env lines: " + ", ".join(bad[:8])
+        return True, "ENV OK"
+    if kind == "caddy":
+        rc, out, err = run(f"caddy validate --config {shlex.quote(str(path))}", timeout=20)
+        if rc == 0:
+            return True, "Caddy config OK"
+        return False, (err or out or "Caddy validation failed").strip()[:300]
+    return True, "No validator for this file type"
+
+
+def apply_config_restart(config):
+    """Apply the operational step implied by a config file edit."""
+    mode = config.get("restart")
+    if mode == "none":
+        return 0, "No restart needed", ""
+    if mode == "caddy":
+        path = config["path"]
+        rc, out, err = run(f"cp {shlex.quote(str(path))} /etc/caddy/Caddyfile && caddy reload --config /etc/caddy/Caddyfile", timeout=30)
+        return rc, out, err
+    env_arg = f"--env-file {shlex.quote(ENV_FILE)}"
+    if mode == "recreate":
+        return docker_compose(f"{env_arg} up -d --force-recreate")
+    if mode == "all":
+        return docker_compose(f"{env_arg} up -d --force-recreate hermes-customer hermes-operator hermes-supplier")
+    return docker_compose(f"{env_arg} up -d --force-recreate hermes-{mode}")
+
+
+AGENTS = get_agents()
 
 # ── Color setup ──
 COLORS_INIT = False
@@ -255,7 +444,12 @@ class HermesTUI:
             ("5", "Restart Agent", self.restart_agent),
             ("6", "Test API / Flowwink", self.test_api),
             ("7", "Environment Config", self.edit_env),
-            ("8", "Chat with Agent", self.chat_agent),
+            ("8", "Config Files", self.config_files),
+            ("9", "Fleet / Images", self.fleet_panel),
+            ("a", "Add Instance", self.add_instance),
+            ("0", "Remove Instance", self.remove_instance),
+            ("m", "MCP Orchestration", self.mcp_panel),
+            ("c", "Chat with Agent", self.chat_agent),
             ("q", "Quit", None),
         ]
 
@@ -298,6 +492,16 @@ class HermesTUI:
             elif key == ord('7'):
                 self.edit_env()
             elif key == ord('8'):
+                self.config_files()
+            elif key == ord('9'):
+                self.fleet_panel()
+            elif key in (ord('a'), ord('A')):
+                self.add_instance()
+            elif key == ord('0'):
+                self.remove_instance()
+            elif key in (ord('m'), ord('M')):
+                self.mcp_panel()
+            elif key in (ord('c'), ord('C')):
                 self.chat_agent()
 
     def draw_header(self):
@@ -442,7 +646,7 @@ class HermesTUI:
                 # ── Bottom action bar ──
                 action_y = h - 3
                 draw_arcane_box(self.stdscr, action_y, 0, h - 1, w - 1, curses.color_pair(6))
-                actions = " [1] Dashboard  [2] Update  [3] Model  [4] Logs  [5] Restart  [6] Test  [7] Config  [8] Chat  [R] Refresh  [Q] Quit "
+                actions = " [1] Dash [2] Update [3] Model [4] Logs [5] Restart [6] Test [8] Files [9] Fleet [M] MCP [C] Chat [Q] Quit "
                 draw_text(self.stdscr, action_y, center_text(actions, w), actions, curses.color_pair(6))
 
                 self.stdscr.refresh()
@@ -486,6 +690,21 @@ class HermesTUI:
                     self._enter_dashboard()
                     tick = 100
                 elif key == ord('8'):
+                    self._leave_dashboard()
+                    self.config_files()
+                    self._enter_dashboard()
+                    tick = 100
+                elif key == ord('9'):
+                    self._leave_dashboard()
+                    self.fleet_panel()
+                    self._enter_dashboard()
+                    tick = 100
+                elif key in (ord('m'), ord('M')):
+                    self._leave_dashboard()
+                    self.mcp_panel()
+                    self._enter_dashboard()
+                    tick = 100
+                elif key in (ord('c'), ord('C')):
                     self._leave_dashboard()
                     self.chat_agent()
                     self._enter_dashboard()
@@ -550,14 +769,8 @@ class HermesTUI:
         draw_text(self.stdscr, 5, 2, f"Current model: {current}")
         draw_text(self.stdscr, 7, 2, "Available models:")
         models = [
-            "openai/gpt-4o-mini",
-            "openai/gpt-4o",
-            "openai/o1-mini",
-            "openai/o1",
-            "anthropic/claude-sonnet-4-20250514",
-            "anthropic/claude-sonnet-4-5-20250514",
-            "anthropic/claude-opus-4-20250514",
-            "anthropic/claude-3-5-haiku-20241022",
+            "autoversio",
+            "custom:code4:autoversio",
         ]
         for i, m in enumerate(models):
             marker = "\u2192" if m == current else " "
@@ -844,6 +1057,379 @@ class HermesTUI:
             elif key == curses.KEY_PPAGE:
                 offset = max(0, offset - max_lines)
 
+
+
+    def fleet_panel(self):
+        """EasyPanel-style fleet and image controls."""
+        actions = [
+            ("1", "Pull latest Hermes image", self._fleet_pull_image),
+            ("2", "Recreate Hermes services", self._fleet_recreate_agents),
+            ("3", "Show image/version info", self._fleet_image_info),
+            ("4", "Show compose status", self._fleet_compose_status),
+            ("5", "Prune dangling images", self._fleet_prune_images),
+        ]
+        selected = 0
+        while True:
+            self.stdscr.erase()
+            h, w = self.stdscr.getmaxyx()
+            draw_text(self.stdscr, 1, 2, " HERMESHOTEL EASYPANEL ", curses.color_pair(6) | curses.A_BOLD)
+            draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+            draw_text(self.stdscr, 4, 2, "Fleet/image operations for all containerized Hermes instances.", curses.color_pair(10), max_len=w - 4)
+            y = 6
+            for idx, (key, label, _) in enumerate(actions):
+                marker = "▶" if idx == selected else " "
+                draw_text(self.stdscr, y, 4, f"{marker} {key}. {label}", curses.color_pair(2) if idx == selected else 0, max_len=w - 8)
+                y += 1
+            draw_text(self.stdscr, h - 2, 2, "↑↓ move | Enter run | q back", curses.color_pair(6), max_len=w - 4)
+            self.stdscr.refresh()
+            key = self.stdscr.getch()
+            if key in (ord('q'), ord('Q'), 27):
+                return
+            if key == curses.KEY_DOWN:
+                selected = min(len(actions) - 1, selected + 1)
+            elif key == curses.KEY_UP:
+                selected = max(0, selected - 1)
+            elif key in (curses.KEY_ENTER, 10, 13):
+                actions[selected][2]()
+            else:
+                for idx, (shortcut, _, func) in enumerate(actions):
+                    if key == ord(shortcut):
+                        selected = idx
+                        func()
+                        break
+
+    def _run_stream_screen(self, title, commands):
+        """Run shell commands sequentially and show collected output."""
+        lines = []
+        for label, cmd, timeout in commands:
+            self.stdscr.erase()
+            h, w = self.stdscr.getmaxyx()
+            draw_text(self.stdscr, 1, 2, f" {title} ", curses.color_pair(6) | curses.A_BOLD, max_len=w - 4)
+            draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+            draw_text(self.stdscr, 5, 2, f"Running: {label}", curses.color_pair(3) | curses.A_BOLD, max_len=w - 4)
+            draw_text(self.stdscr, 7, 2, cmd, curses.A_DIM, max_len=w - 4)
+            self.stdscr.refresh()
+            rc, out, err = run(cmd, timeout=timeout)
+            lines.append(f"$ {label}")
+            lines.append(f"rc={rc}")
+            output = (out or err or "").splitlines()
+            lines.extend(output[-20:] if output else ["(no output)"])
+            lines.append("")
+        self.message_screen(title, lines[-(self.stdscr.getmaxyx()[0] - 6):])
+
+    def _fleet_pull_image(self):
+        self._run_stream_screen("Pull Latest Image", [
+            ("before image inspect", "docker image inspect nousresearch/hermes-agent:latest --format '{{.Id}} {{.Created}}'", 30),
+            ("compose pull Hermes services", f"docker compose -f {shlex.quote(COMPOSE_FILE)} --env-file {shlex.quote(ENV_FILE)} pull hermes-customer hermes-operator hermes-supplier", 300),
+            ("after image inspect", "docker image inspect nousresearch/hermes-agent:latest --format '{{.Id}} {{.Created}}'", 30),
+        ])
+
+    def _fleet_recreate_agents(self):
+        self._run_stream_screen("Recreate Hermes Services", [
+            ("recreate services", f"docker compose -f {shlex.quote(COMPOSE_FILE)} --env-file {shlex.quote(ENV_FILE)} up -d --force-recreate hermes-customer hermes-operator hermes-supplier", 300),
+            ("compose ps", f"docker compose -f {shlex.quote(COMPOSE_FILE)} --env-file {shlex.quote(ENV_FILE)} ps", 60),
+        ])
+
+    def _fleet_image_info(self):
+        self._run_stream_screen("Image / Version Info", [
+            ("local image", "docker image inspect nousresearch/hermes-agent:latest --format '{{.RepoTags}} {{.Id}} {{.Created}}'", 30),
+            ("operator hermes version", "docker exec hermes-operator /bin/sh -lc '. /opt/hermes/.venv/bin/activate && hermes --version'", 60),
+            ("operator model smoke test", "docker exec hermes-operator /bin/sh -lc '. /opt/hermes/.venv/bin/activate && timeout 120 hermes -z '\"'\"'Svara med endast orden: fleet ok'\"'\"''", 160),
+        ])
+
+    def _fleet_compose_status(self):
+        self._run_stream_screen("Compose Status", [
+            ("compose ps", f"docker compose -f {shlex.quote(COMPOSE_FILE)} --env-file {shlex.quote(ENV_FILE)} ps", 60),
+            ("docker stats snapshot", "docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}} {{.MemPerc}}'", 60),
+        ])
+
+    def _fleet_prune_images(self):
+        self._run_stream_screen("Prune Dangling Images", [
+            ("docker image prune", "docker image prune -f", 120),
+        ])
+
+    def mcp_panel(self):
+        """Show HermesHotel MCP orchestration design and hooks."""
+        lines = [
+            "HermesHotel should expose MCP tools so one Hermes can spawn/manage more Hermes instances.",
+            "",
+            "Planned MCP tool surface:",
+            "- hermeshotel_list_instances: read instances.json + compose status",
+            "- hermeshotel_spawn_instance: create profile, compose service, port/domain, env token",
+            "- hermeshotel_remove_instance: stop/remove service and mark inactive",
+            "- hermeshotel_pull_image: pull nousresearch/hermes-agent:latest",
+            "- hermeshotel_recreate_instance: recreate one Hermes service",
+            "- hermeshotel_get_config: read masked config files",
+            "- hermeshotel_patch_config: safe patch + validate + backup",
+            "- hermeshotel_reload_proxy: validate/reload Caddy",
+            "",
+            "Security model:",
+            "- allowlisted profile directory only",
+            "- never return raw secrets",
+            "- write backups before patching",
+            "- validate YAML/JSON/Caddy before applying",
+            "- require explicit approval for destructive remove/prune",
+            "",
+            "Next implementation target:",
+            "- add a small MCP server under mcp/hermeshotel_server.py",
+            "- register it in operator config as local stdio/http MCP",
+            "- back it with the same config registry used by TUI option 8",
+        ]
+        self.message_screen("MCP Orchestration", lines)
+
+    def config_files(self):
+        """Browse, view, validate, and edit stack config files."""
+        configs = get_config_files()
+        selected = 0
+        while True:
+            self.stdscr.erase()
+            h, w = self.stdscr.getmaxyx()
+            if h < 16 or w < 70:
+                draw_text(self.stdscr, 2, 2, "Terminal too small for config cockpit.", curses.color_pair(5))
+                self.stdscr.refresh()
+                self.stdscr.getch()
+                return
+
+            draw_text(self.stdscr, 1, 2, " CONFIG COCKPIT ", curses.color_pair(6) | curses.A_BOLD)
+            draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+            draw_text(self.stdscr, 4, 2, "These files make the official Hermes container boot with the current settings.", curses.color_pair(10))
+
+            top = 6
+            visible = h - 11
+            start = max(0, min(selected - visible + 1, len(configs) - visible))
+            start = max(0, start)
+            for row, idx in enumerate(range(start, min(start + visible, len(configs)))):
+                cfg = configs[idx]
+                marker = "▶" if idx == selected else " "
+                exists = "OK" if cfg["path"].exists() else "MISS"
+                color = curses.color_pair(2) if idx == selected else 0
+                if exists == "MISS":
+                    color = curses.color_pair(5)
+                line = f"{marker} {idx + 1:>2}. {cfg['label']:<24} [{exists}] {str(cfg['path'])}"
+                draw_text(self.stdscr, top + row, 2, line, color, max_len=w - 4)
+
+            cfg = configs[selected]
+            detail_y = h - 5
+            draw_arcane_box(self.stdscr, detail_y - 1, 0, h - 1, w - 1, curses.color_pair(6))
+            draw_text(self.stdscr, detail_y, 2, f"Why: {cfg['why']}", curses.color_pair(6), max_len=w - 4)
+            draw_text(self.stdscr, detail_y + 1, 2, "Enter view | e edit | v validate | a apply/restart | ↑↓ move | q quit", curses.color_pair(6), max_len=w - 4)
+            self.stdscr.refresh()
+
+            key = self.stdscr.getch()
+            if key in (ord('q'), ord('Q'), 27):
+                break
+            if key == curses.KEY_DOWN:
+                selected = min(len(configs) - 1, selected + 1)
+            elif key == curses.KEY_UP:
+                selected = max(0, selected - 1)
+            elif key in (curses.KEY_ENTER, 10, 13):
+                self.view_config_file(configs[selected])
+            elif key in (ord('e'), ord('E')):
+                self.edit_config_file(configs[selected])
+            elif key in (ord('v'), ord('V')):
+                self.validate_config_screen(configs[selected])
+            elif key in (ord('a'), ord('A')):
+                self.apply_config_screen(configs[selected])
+            elif ord('1') <= key <= ord('9'):
+                idx = key - ord('1')
+                if idx < len(configs):
+                    selected = idx
+
+    def view_config_file(self, cfg):
+        """Scrollable masked config viewer."""
+        path = cfg["path"]
+        try:
+            raw_lines = path.read_text(errors="replace").splitlines()
+            lines = [mask_secret_line(line) for line in raw_lines]
+        except Exception as e:
+            lines = [f"Could not read {path}: {e}"]
+
+        offset = 0
+        while True:
+            self.stdscr.erase()
+            h, w = self.stdscr.getmaxyx()
+            draw_text(self.stdscr, 0, 1, f" VIEW: {cfg['label']} ", curses.color_pair(6) | curses.A_BOLD, max_len=w - 2)
+            draw_text(self.stdscr, 1, 1, str(path), curses.A_DIM, max_len=w - 2)
+            visible = max(1, h - 5)
+            for i in range(visible):
+                idx = offset + i
+                if idx >= len(lines):
+                    break
+                line = f"{idx + 1:>4}│ {lines[idx]}"
+                color = curses.color_pair(3) if any(x in lines[idx].lower() for x in ("todo", "fixme", "missing")) else 0
+                draw_text(self.stdscr, i + 3, 1, line, color, max_len=w - 2)
+            footer = f"{offset + 1}-{min(offset + visible, len(lines))}/{len(lines)} | ↑↓ PgUp/PgDn scroll | e edit | v validate | q back"
+            draw_text(self.stdscr, h - 1, 1, footer, curses.color_pair(6), max_len=w - 2)
+            self.stdscr.refresh()
+            key = self.stdscr.getch()
+            if key in (ord('q'), ord('Q'), 27):
+                break
+            elif key == curses.KEY_DOWN and offset < max(0, len(lines) - visible):
+                offset += 1
+            elif key == curses.KEY_UP and offset > 0:
+                offset -= 1
+            elif key == curses.KEY_NPAGE:
+                offset = min(max(0, len(lines) - visible), offset + visible)
+            elif key == curses.KEY_PPAGE:
+                offset = max(0, offset - visible)
+            elif key in (ord('e'), ord('E')):
+                self.edit_config_file(cfg)
+                try:
+                    raw_lines = path.read_text(errors="replace").splitlines()
+                    lines = [mask_secret_line(line) for line in raw_lines]
+                except Exception as e:
+                    lines = [f"Could not read {path}: {e}"]
+            elif key in (ord('v'), ord('V')):
+                self.validate_config_screen(cfg)
+
+    def edit_config_file(self, cfg):
+        """Open a config in $EDITOR, validate it, and optionally apply changes."""
+        path = cfg["path"]
+        if not path.exists():
+            self.message_screen("Edit Config", [f"File not found: {path}"])
+            return
+        editor = os.environ.get("EDITOR", "nano")
+        backup = path.with_suffix(path.suffix + f".bak-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+        try:
+            backup.write_text(path.read_text())
+        except Exception as e:
+            self.message_screen("Edit Config", [f"Could not create backup:", str(e)])
+            return
+
+        curses.def_prog_mode()
+        curses.endwin()
+        rc = subprocess.call(f"{shlex.quote(editor)} {shlex.quote(str(path))}", shell=True)
+        self.stdscr.refresh()
+        curses.reset_prog_mode()
+        curses.curs_set(0)
+
+        ok, msg = validate_config_file(path, cfg["kind"])
+        lines = [
+            f"Editor exit code: {rc}",
+            f"Backup: {backup}",
+            f"Validation: {msg}",
+        ]
+        if not ok:
+            lines += ["", "Validation failed. Press r to restore backup, any other key to keep edit."]
+            key = self.message_screen("Validation Failed", lines, wait=False)
+            if key in (ord('r'), ord('R')):
+                path.write_text(backup.read_text())
+                self.message_screen("Restored", [f"Restored from {backup}"])
+            return
+
+        lines += ["", "Press a to apply/restart now, any other key to return."]
+        key = self.message_screen("Edit Saved", lines, wait=False)
+        if key in (ord('a'), ord('A')):
+            self.apply_config_screen(cfg)
+
+    def validate_config_screen(self, cfg):
+        ok, msg = validate_config_file(cfg["path"], cfg["kind"])
+        title = "Validation OK" if ok else "Validation Failed"
+        self.message_screen(title, [cfg["label"], str(cfg["path"]), "", msg])
+
+    def apply_config_screen(self, cfg):
+        self.stdscr.erase()
+        draw_text(self.stdscr, 2, 2, f"Applying {cfg['label']}...", curses.color_pair(3) | curses.A_BOLD)
+        draw_text(self.stdscr, 4, 2, f"Mode: {cfg.get('restart')}")
+        self.stdscr.refresh()
+        rc, out, err = apply_config_restart(cfg)
+        output = (out or err or "Done").splitlines()
+        lines = [f"Return code: {rc}", ""] + output[-12:]
+        self.message_screen("Apply Result", lines)
+
+    def message_screen(self, title, lines, wait=True):
+        self.stdscr.erase()
+        h, w = self.stdscr.getmaxyx()
+        draw_text(self.stdscr, 1, 2, f" {title} ", curses.color_pair(6) | curses.A_BOLD, max_len=w - 4)
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        y = 5
+        for line in lines:
+            if y >= h - 3:
+                break
+            draw_text(self.stdscr, y, 2, str(line), max_len=w - 4)
+            y += 1
+        draw_text(self.stdscr, h - 2, 2, "Press any key to continue...", curses.color_pair(6), max_len=w - 4)
+        self.stdscr.refresh()
+        key = self.stdscr.getch()
+        if wait:
+            return key
+        return key
+
+
+    def add_instance(self):
+        """Add a new Hermes agent from operator template using scripts/add-hermes.sh."""
+        self.stdscr.erase()
+        h, w = self.stdscr.getmaxyx()
+        draw_text(self.stdscr, 1, 2, " ADD HERMES AGENT ", curses.color_pair(6) | curses.A_BOLD)
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_text(self.stdscr, 5, 2, "Profile name (lowercase, letters only, e.g. sales): ")
+        self.stdscr.refresh()
+        curses.echo()
+        try:
+            name = self.stdscr.getstr(5, 45, 20).decode().strip()
+        finally:
+            curses.noecho()
+        if not name or not name.islower() or not name.replace("_", "").isalnum():
+            self.message_screen("Add Hermes", ["Invalid name. Use lowercase letters/underscores only."])
+            return
+        # Run add‑hermes.sh
+        add_script = "/opt/hermeshotel/scripts/add-hermes.sh"
+        if not os.path.isfile(add_script):
+            self.message_screen("Add Hermes", [f"Script missing: {add_script}"])
+            return
+        proc = subprocess.run(
+            ["/bin/bash", add_script, name],
+            capture_output=True, text=True, cwd="/opt/hermeshotel"
+        )
+        if proc.returncode != 0:
+            self.message_screen("Add Hermes", [f"Script failed (code {proc.returncode})", proc.stderr[:300]])
+            return
+        # Reload instances
+        global AGENTS
+        AGENTS = get_agents()
+        self.message_screen("Add Hermes", [f"✔ hermes-{name} added!", "", proc.stdout[:400]])
+
+    def remove_instance(self):
+        """Remove or deactivate an instance from instances.json."""
+        instances = load_instances()
+        if not instances:
+            self.message_screen("Remove Instance", ["No instances configured."])
+            return
+        selected = 0
+        while True:
+            self.stdscr.erase()
+            h, w = self.stdscr.getmaxyx()
+            draw_text(self.stdscr, 1, 2, " REMOVE INSTANCE ", curses.color_pair(6) | curses.A_BOLD)
+            draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+            draw_text(self.stdscr, 4, 2, "Enter removes from TUI list only. It does not delete Docker volumes or profiles.", curses.color_pair(3), max_len=w - 4)
+            for idx, inst in enumerate(instances[: h - 8]):
+                marker = "▶" if idx == selected else " "
+                active = "active" if inst.get("active", True) else "inactive"
+                line = f"{marker} {idx + 1}. {inst.get('name')}  {inst.get('domain')}  {active}"
+                draw_text(self.stdscr, 6 + idx, 2, line, curses.color_pair(2) if idx == selected else 0, max_len=w - 4)
+            draw_text(self.stdscr, h - 2, 2, "↑↓ move | Enter remove | d deactivate | q cancel", curses.color_pair(6), max_len=w - 4)
+            self.stdscr.refresh()
+            key = self.stdscr.getch()
+            if key in (ord('q'), ord('Q'), 27):
+                return
+            if key == curses.KEY_DOWN:
+                selected = min(len(instances) - 1, selected + 1)
+            elif key == curses.KEY_UP:
+                selected = max(0, selected - 1)
+            elif key in (ord('d'), ord('D')):
+                instances[selected]["active"] = False
+                save_instances(instances)
+                global AGENTS
+                AGENTS = get_agents()
+                self.message_screen("Remove Instance", [f"Deactivated {instances[selected].get('name')}"])
+                return
+            elif key in (curses.KEY_ENTER, 10, 13):
+                removed = instances.pop(selected)
+                save_instances(instances)
+                AGENTS = get_agents()
+                self.message_screen("Remove Instance", [f"Removed {removed.get('name')} from {INSTANCES_FILE}"])
+                return
+
     def chat_agent(self):
         """Chat with the Hermes operator agent via CLI."""
         self.stdscr.erase()
@@ -883,7 +1469,8 @@ class HermesTUI:
                 self.stdscr.refresh()
 
                 # Call the Hermes CLI
-                cmd = f"docker exec hermes-operator python -m hermes_cli.main chat -q '{user_input}' -Q --provider openai -m gpt-4o-mini"
+                inner_cmd = ". /opt/hermes/.venv/bin/activate && hermes -z " + shlex.quote(user_input)
+                cmd = "docker exec hermes-operator /bin/sh -lc " + shlex.quote(inner_cmd)
                 rc, out, err = run(cmd, timeout=60)
 
                 # Clear thinking and show response

@@ -27,7 +27,7 @@ mcp_servers:
   flowwink:
     url: https://rzhjotxffjfsdlhrdkpj.supabase.co/functions/v1/mcp-server
     headers:
-      Authorization: Bearer fwk_1cf484bf2fe6cd480b20ac7af53d5cf2dae5382f1a7c51c3f5042dd8bc26a369
+      Authorization: Bearer fwk_36ef2653369bef8c0f0af1290ac0df760e030a351700da4e230d77b2805ae68c
     timeout: 60
 
 # Memory

@@ -9,7 +9,7 @@ I Easypanel, lägg till dessa miljövariabler:
 ```bash
 # LLM
 OPENAI_API_KEY=sk-...
-HERMES_MODEL=openai/gpt-4o-mini
+HERMES_MODEL=autoversio
 
 # Logging
 HERMES_LOG_LEVEL=debug
@@ -19,7 +19,7 @@ PYTHONUNBUFFERED=1
 HERMES_SESSION_TOKEN=hermes-customer-secret-token-2024-magnusfroste
 
 # Flowwink MCP (redan satt)
-FLOWWINK_API_KEY=fwk_1cf484bf2fe6cd480b20ac7af53d5cf2dae5382f1a7c51c3f5042dd8bc26a369
+FLOWWINK_API_KEY=fwk_36ef2653369bef8c0f0af1290ac0df760e030a351700da4e230d77b2805ae68c
 ```
 
 ## Steg 2: Kopiera profil till container

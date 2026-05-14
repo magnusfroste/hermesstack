@@ -1,0 +1,134 @@
+# HermesHotel — auto-generated docker-compose.yml
+# DO NOT EDIT MANUALLY — use scripts/generate-compose.py
+
+services:
+
+  hermes-customer:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-customer
+    restart: unless-stopped
+    environment:
+      - HERMES_HOME=/data/hermes-profiles/customer
+      - HERMES_MODEL=${HERMES_MODEL:-autoversio}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PROFILE_ROLE=customer
+      - HERMES_CUSTOMER_TOKEN=${HERMES_CUSTOMER_TOKEN}
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=3000
+      - HERMES_DASHBOARD_TUI=1
+    volumes:
+      - customer-data:/data/hermes-profiles/customer
+      - /opt/hermeshotel/profiles/customer/config.yaml:/data/hermes-profiles/customer/config.yaml
+    ports:
+      - "127.0.0.1:3001:3000"
+    command: ["sleep", "infinity"]
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  hermes-operator:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-operator
+    restart: unless-stopped
+    environment:
+      - HERMES_HOME=/data/hermes-profiles/operator
+      - HERMES_MODEL=${HERMES_MODEL:-autoversio}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - FLOWWINK_API_KEY=${FLOWWINK_API_KEY}
+      - PROFILE_ROLE=operator
+      - HERMES_OPERATOR_TOKEN=${HERMES_OPERATOR_TOKEN}
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=3000
+      - HERMES_DASHBOARD_TUI=1
+    volumes:
+      - operator-data:/data/hermes-profiles/operator
+      - /opt/hermeshotel/profiles/operator/config.yaml:/data/hermes-profiles/operator/config.yaml
+    ports:
+      - "127.0.0.1:3002:3000"
+    command: ["sleep", "infinity"]
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  hermes-supplier:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-supplier
+    restart: unless-stopped
+    environment:
+      - HERMES_HOME=/data/hermes-profiles/supplier
+      - HERMES_MODEL=${HERMES_MODEL:-autoversio}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PROFILE_ROLE=supplier
+      - HERMES_SUPPLIER_TOKEN=${HERMES_SUPPLIER_TOKEN}
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=3000
+      - HERMES_DASHBOARD_TUI=1
+    volumes:
+      - supplier-data:/data/hermes-profiles/supplier
+      - /opt/hermeshotel/profiles/supplier/config.yaml:/data/hermes-profiles/supplier/config.yaml
+    ports:
+      - "127.0.0.1:3003:3000"
+    command: ["sleep", "infinity"]
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: hermes-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - hermes-network
+    command: redis-server --appendonly yes
+
+  hermeshotel-web:
+    image: python:3.12-alpine
+    container_name: hermeshotel-web
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - HERMESHOTEL_WEB_PORT=3099
+      - HERMESHOTEL_REFRESH_SECONDS=5
+    volumes:
+      - /opt/hermeshotel/hermes-web.py:/app/hermes-web.py:ro
+      - /opt/hermeshotel/instances.json:/app/instances.json:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:3099:3099"
+    command: ["python", "/app/hermes-web.py"]
+    networks:
+      - hermes-network
+    depends_on:
+      - hermes-customer
+      - hermes-operator
+      - hermes-supplier
+
+volumes:
+  customer-data:
+  operator-data:
+  supplier-data:
+  redis-data:
+
+networks:
+  hermes-network:
+    driver: bridge

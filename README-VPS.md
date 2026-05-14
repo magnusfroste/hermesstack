@@ -41,12 +41,12 @@ A-record: supplier.hermes.froste.eu → DIN_VPS_IP
 ssh root@DIN_VPS_IP
 
 # Kör setup
-curl -fsSL https://raw.githubusercontent.com/magnusfroste/hermesstack/main/vps-setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/magnusfroste/hermesstack/main/scripts/init.sh | bash
 
 # Eller manuellt:
-git clone https://github.com/magnusfroste/hermesstack.git /opt/hermesstack
-cd /opt/hermesstack
-./vps-setup.sh
+git clone https://github.com/magnusfroste/hermesstack.git /opt/hermeshotel
+cd /opt/hermeshotel
+./scripts/init.sh
 ```
 
 ### 4. Konfigurera miljövariabler

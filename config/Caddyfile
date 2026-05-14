@@ -5,25 +5,43 @@
     admin localhost:2019
 }
 
-# ============================================
-# CUSTOMER AGENT
-# ============================================
-customer.froste.eu {
-    reverse_proxy localhost:3001 {
-        flush_interval -1
-    }
+(hermes_headers) {
+    @options method OPTIONS
+    respond @options 204
 
     header {
         Access-Control-Allow-Origin "*"
         Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Access-Control-Allow-Headers "*"
+        Access-Control-Allow-Headers "X-Hermes-Session-Token, Authorization, Content-Type, Accept, Origin, X-Requested-With"
+        Access-Control-Expose-Headers "X-Hermes-Session-Token"
+        Access-Control-Max-Age "3600"
+        Cache-Control "no-store"
     }
+}
 
-    @websockets {
-        header Connection *Upgrade*
-        header Upgrade websocket
+# ============================================
+# HERMESHOTEL LIGHT PANEL
+# ============================================
+hermeshotel.froste.eu {
+    reverse_proxy localhost:3099
+
+    log {
+        output file /var/log/caddy/hermeshotel-access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
     }
-    reverse_proxy @websockets localhost:3001
+}
+
+# ============================================
+# CUSTOMER AGENT
+# ============================================
+customer.froste.eu {
+    import hermes_headers
+
+    reverse_proxy localhost:3001 {
+        flush_interval -1
+    }
 
     log {
         output file /var/log/caddy/customer-access.log {
@@ -37,21 +55,11 @@ customer.froste.eu {
 # OPERATOR AGENT
 # ============================================
 operator.froste.eu {
+    import hermes_headers
+
     reverse_proxy localhost:3002 {
         flush_interval -1
     }
-
-    header {
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Access-Control-Allow-Headers "*"
-    }
-
-    @websockets {
-        header Connection *Upgrade*
-        header Upgrade websocket
-    }
-    reverse_proxy @websockets localhost:3002
 
     log {
         output file /var/log/caddy/operator-access.log {
@@ -65,21 +73,11 @@ operator.froste.eu {
 # SUPPLIER AGENT
 # ============================================
 supplier.froste.eu {
+    import hermes_headers
+
     reverse_proxy localhost:3003 {
         flush_interval -1
     }
-
-    header {
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Access-Control-Allow-Headers "*"
-    }
-
-    @websockets {
-        header Connection *Upgrade*
-        header Upgrade websocket
-    }
-    reverse_proxy @websockets localhost:3003
 
     log {
         output file /var/log/caddy/supplier-access.log {
