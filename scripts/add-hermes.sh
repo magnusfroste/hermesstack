@@ -56,7 +56,7 @@ PY
 
 # ── Ensure session token in .env ──
 profile_upper=$(echo "$PROFILE" | tr '[:lower:]' '[:upper:]')
-token_var="HERMES_${profile_upper}_TOKEN"
+token_var="HERMES_SESSION_TOKEN"
 if ! grep -q "^${token_var}=" .env; then
   token_val="hermes-${PROFILE}-$(openssl rand -hex 8)"
   echo "${token_var}=${token_val}" >> .env

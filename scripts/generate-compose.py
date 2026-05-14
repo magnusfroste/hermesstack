@@ -23,7 +23,7 @@ def load_instances() -> dict:
 def agent_block(profile: str, inst: dict) -> str:
     port = inst.get("port", 3000)
     profile_upper = profile.upper()
-    token_var = f"HERMES_{profile_upper}_TOKEN"
+    token_var = "HERMES_SESSION_TOKEN"
 
     block = [
         f"  hermes-{profile}:",
