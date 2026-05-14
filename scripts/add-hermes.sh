@@ -66,15 +66,11 @@ else
 fi
 
 # ── Update Caddyfile with new domain ──
-CADDYFILE="config/Caddyfile"
-if [ -f "$CADDYFILE" ]; then
-  # Check if domain already exists in Caddyfile
-  if ! grep -q "$DOMAIN" "$CADDYFILE"; then
-    # Get the host port for this container from compose
-    HOST_PORT=$(docker compose -f docker-compose.yml config 2>/dev/null | grep -A2 "hermes-$PROFILE" | grep "127.0.0.1" | head -1 | sed 's/.*127.0.0.1:\([0-9]*\):3000.*/\1/')
-    if [ -z "$HOST_PORT" ]; then
-      # Calculate from instances.json
-      HOST_PORT=$(python3 -c "
+CADDYFILE="/etc/caddy/Caddyfile"
+OUR_CADDYFILE="config/Caddyfile"
+
+# Get the host port from instances.json
+HOST_PORT=$(python3 -c "
 import json
 with open('instances.json') as f:
     data = json.load(f)
@@ -83,19 +79,41 @@ for i in data.get('instances', []):
         print(i.get('port', 3000))
         break
 ")
-    fi
-    # Add Caddy block for new domain
-    cat >> "$CADDYFILE" <<CADDEOF
+
+# Update /etc/caddy/Caddyfile (system Caddy)
+if [ -f "$CADDYFILE" ] && ! grep -q "$DOMAIN" "$CADDYFILE"; then
+  cat >> "$CADDYFILE" <<CADDEOF
 
 $DOMAIN {
-  reverse_proxy 127.0.0.1:${HOST_PORT}
+    import hermes_headers
+
+    reverse_proxy localhost:${HOST_PORT} {
+        flush_interval -1
+    }
 }
 CADDEOF
-    info "Added $DOMAIN → 127.0.0.1:${HOST_PORT} to Caddyfile"
-    info "Run: sudo caddy reload"
-  else
-    info "$DOMAIN already in Caddyfile"
-  fi
+  info "Added $DOMAIN → localhost:${HOST_PORT} to /etc/caddy/Caddyfile"
+fi
+
+# Update config/Caddyfile (repo copy)
+if [ -f "$OUR_CADDYFILE" ] && ! grep -q "$DOMAIN" "$OUR_CADDYFILE"; then
+  cat >> "$OUR_CADDYFILE" <<CADDEOF
+
+$DOMAIN {
+    import hermes_headers
+
+    reverse_proxy localhost:${HOST_PORT} {
+        flush_interval -1
+    }
+}
+CADDEOF
+  info "Added $DOMAIN → localhost:${HOST_PORT} to config/Caddyfile"
+fi
+
+# Reload Caddy if running
+if caddy validate --config /etc/caddy/Caddyfile 2>/dev/null; then
+  caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || systemctl reload caddy 2>/dev/null || true
+  info "Caddy reloaded"
 fi
 
 # ── Regenerate docker‑compose.yml ──

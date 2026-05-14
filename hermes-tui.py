@@ -1388,7 +1388,7 @@ class HermesTUI:
         draw_text(self.stdscr, 6, 2, "Name (e.g. operator): ")
         draw_text(self.stdscr, 7, 2, "Domain (e.g. operator.example.com): ")
         draw_text(self.stdscr, 8, 2, "OpenAI API Key (sk-proj-...): ")
-        draw_text(self.stdscr, 9, 2, "LLM Base URL (https://api.localhost.ai/v1): ")
+        draw_text(self.stdscr, 9, 2, "LLM Base URL (https://api.openai.com/v1): ")
         self.stdscr.refresh()
         curses.echo()
         curses.curs_set(1)
@@ -1409,7 +1409,7 @@ class HermesTUI:
             self.message_screen("Create First Hermes", ["OpenAI API Key is required."])
             return
         if not llm_url:
-            llm_url = "https://api.localhost.ai/v1"
+            llm_url = "https://api.openai.com/v1"
         # Update .env with API key and LLM URL
         env_path = "/opt/hermeshotel/.env"
         try:
