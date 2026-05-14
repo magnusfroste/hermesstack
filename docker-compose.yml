@@ -23,7 +23,7 @@ services:
       - operator-data:/data/hermes-profiles/operator
       - /opt/hermeshotel/profiles/operator/config.yaml:/data/hermes-profiles/operator/config.yaml
     ports:
-      - "127.0.0.1:3002:3000"
+      - "127.0.0.1:3001:3000"
     command: ["sleep", "infinity"]
     networks:
       - hermes-network

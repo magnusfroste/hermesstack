@@ -17,17 +17,13 @@ if [ -z "$PROFILE" ]; then
 fi
 
 if [ -d "profiles/$PROFILE" ]; then
-  error "profiles/$PROFILE already exists"
-  exit 1
+  # Profile already exists — use it as-is (first-run with operator template)
+  info "profiles/$PROFILE already exists — using existing profile"
+else
+  # Copy operator template
+  info "Copying profiles/operator → profiles/$PROFILE"
+  cp -r profiles/operator "profiles/$PROFILE"
 fi
-
-if [ -z "$DOMAIN" ]; then
-  DOMAIN="${PROFILE}.froste.eu"
-fi
-
-# ── Copy operator template ──
-info "Copying profiles/operator → profiles/$PROFILE"
-cp -r profiles/operator "profiles/$PROFILE"
 
 # ── Update instances.json (append new agent) ──
 info "Updating instances.json"
