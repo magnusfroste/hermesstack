@@ -1384,23 +1384,49 @@ class HermesTUI:
         h, w = self.stdscr.getmaxyx()
         draw_text(self.stdscr, 1, 2, " CREATE FIRST HERMES ", curses.color_pair(6) | curses.A_BOLD)
         draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
-        draw_text(self.stdscr, 5, 2, "No instances found. Let's set up your first Hermes agent.")
+        draw_text(self.stdscr, 5, 2, "No agents found. Let's set up your first Hermes!")
         draw_text(self.stdscr, 6, 2, "Name (e.g. operator): ")
         draw_text(self.stdscr, 7, 2, "Domain (e.g. operator.example.com): ")
+        draw_text(self.stdscr, 8, 2, "OpenAI API Key (sk-proj-...): ")
+        draw_text(self.stdscr, 9, 2, "LLM Base URL (https://api.localhost.ai/v1): ")
         self.stdscr.refresh()
         curses.echo()
         curses.curs_set(1)
         try:
             name = self.stdscr.getstr(6, 30, 20).decode().strip()
             domain = self.stdscr.getstr(7, 40, 40).decode().strip()
+            api_key = self.stdscr.getstr(8, 35, 60).decode().strip()
+            llm_url = self.stdscr.getstr(9, 45, 60).decode().strip()
         finally:
             curses.noecho()
             curses.curs_set(0)
         if not name:
             name = "operator"
         if not domain:
-            self.message_screen("Create First Hermes", ["Domain is required. Please try again."])
+            self.message_screen("Create First Hermes", ["Domain is required."])
             return
+        if not api_key:
+            self.message_screen("Create First Hermes", ["OpenAI API Key is required."])
+            return
+        if not llm_url:
+            llm_url = "https://api.localhost.ai/v1"
+        # Update .env with API key and LLM URL
+        env_path = "/opt/hermeshotel/.env"
+        try:
+            with open(env_path) as f:
+                env_lines = f.readlines()
+        except FileNotFoundError:
+            env_lines = []
+        new_env = []
+        for line in env_lines:
+            if line.startswith("OPENAI_API_KEY="):
+                new_env.append(f"OPENAI_API_KEY={api_key}\n")
+            elif line.startswith("LLM_BASE_URL="):
+                new_env.append(f"LLM_BASE_URL={llm_url}\n")
+            else:
+                new_env.append(line)
+        with open(env_path, "w") as f:
+            f.writelines(new_env)
         # Run add-hermes.sh with domain
         add_script = "/opt/hermeshotel/scripts/add-hermes.sh"
         if not os.path.isfile(add_script):
@@ -1419,11 +1445,11 @@ class HermesTUI:
         self.message_screen("Create First Hermes", [
             f"✔ hermes-{name} created!",
             f"Domain: {domain}",
+            f"API Key: {api_key[:12]}...",
+            f"LLM URL: {llm_url}",
             "",
-            "Next steps:",
-            "1. Set OPENAI_API_KEY and LLM_BASE_URL in .env",
-            "2. sudo caddy reload",
-            "3. Restart container: docker compose -f docker-compose.yml restart hermes-" + name
+            "Container is starting... wait ~15s then visit:",
+            f"  https://{domain}"
         ])
 
     def add_instance(self):
