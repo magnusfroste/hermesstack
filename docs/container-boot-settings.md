@@ -9,7 +9,7 @@ Run Hermes in containers while keeping the official Hermes web UI usable:
 - The dashboard must load through Caddy.
 - The dashboard must be able to call protected `/api/*` routes.
 - The dashboard must be able to save `config.yaml`.
-- The operator must use the private `autoversio` LLM endpoint.
+- The operator must use the private `llama-3-8b` LLM endpoint.
 - The operator must load Flowwink MCP.
 
 ## Compose Settings
@@ -29,7 +29,7 @@ Dashboard startup is controlled by env vars:
 ```yaml
 environment:
   - HERMES_HOME=/data/hermes-profiles/operator
-  - HERMES_MODEL=${HERMES_MODEL:-autoversio}
+  - HERMES_MODEL=${HERMES_MODEL:-llama-3-8b}
   - OPENAI_API_KEY=${OPENAI_API_KEY}
   - FLOWWINK_API_KEY=${FLOWWINK_API_KEY}
   - HERMES_DASHBOARD=1
@@ -99,30 +99,30 @@ Files:
 - `profiles/supplier/config.yaml`
 - `.env`
 
-The running model is `autoversio`:
+The running model is `llama-3-8b`:
 
 ```yaml
 model:
   provider: custom
-  default: autoversio
-  base_url: https://code4.autoversio.ai/v1
+  default: llama-3-8b
+  base_url: https://code4.llama-3-8b.ai/v1
   api_mode: chat_completions
 
 custom_providers:
   - name: code4
-    base_url: https://code4.autoversio.ai/v1
+    base_url: https://code4.llama-3-8b.ai/v1
     key_env: OPENAI_API_KEY
     api_mode: chat_completions
-    model: autoversio
+    model: llama-3-8b
     models:
-      autoversio:
+      llama-3-8b:
         context_length: 128000
 ```
 
 `.env` also contains:
 
 ```bash
-HERMES_MODEL=autoversio
+HERMES_MODEL=llama-3-8b
 ```
 
 ## Flowwink Settings

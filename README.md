@@ -18,7 +18,7 @@ All three agents come up automatically. Open `https://operator.<your‑domain>` 
 ```
 hermeshotel/
 ├── docker-compose.yml          # main compose: 3 × hermes‑* + hermeshotel‑web + redis
-├── .env                        # secrets & model (OPENAI_API_KEY, HERMES_MODEL=autoversio, FLOWWINK_API_KEY)
+├── .env                        # secrets & model (OPENAI_API_KEY, HERMES_MODEL=llama-3-8b, FLOWWINK_API_KEY)
 ├── hermes-tui.py               # TUI control panel (directly executable)
 ├── hermes-web.py               # lightweight fleet status web panel
 ├── scripts/
@@ -88,7 +88,7 @@ sudo systemctl status caddy
 ### .env (root)
 ```env
 OPENAI_API_KEY=sk-…
-HERMES_MODEL=autoversio
+HERMES_MODEL=llama-3-8b
 FLOWWINK_API_KEY=fwk_…   # operator only
 HERMES_LOG_LEVEL=info
 PYTHONUNBUFFERED=1
@@ -121,9 +121,9 @@ All should return `200`.
 
 Inside operator container:
 ```bash
-docker exec hermes-operator /bin/sh -lc '. /opt/hermes/.venv/bin/activate && hermes -z "Svara med endast orden: autoversio aktiv"'
+docker exec hermes-operator /bin/sh -lc '. /opt/hermes/.venv/bin/activate && hermes -z "Svara med endast orden: llama-3-8b aktiv"'
 ```
-Expected output: `autoversio aktiv`
+Expected output: `llama-3-8b aktiv`
 
 ## Notes
 
@@ -145,7 +145,7 @@ See `docs/` for detailed setup, lessons learned, EasyPanel integration, and MCP 
 Expected:
 
 ```text
-autoversio aktiv
+llama-3-8b aktiv
 ```
 
 ## Private LLM Configuration
@@ -155,7 +155,7 @@ The profiles use Hermes' custom OpenAI-compatible provider format:
 ```yaml
 model:
   provider: custom
-  default: autoversio
+  default: llama-3-8b
   base_url: https://api.localhost.ai/v1
   api_mode: chat_completions
 
@@ -164,9 +164,9 @@ custom_providers:
     base_url: https://api.localhost.ai/v1
     key_env: OPENAI_API_KEY
     api_mode: chat_completions
-    model: autoversio
+    model: llama-3-8b
     models:
-      autoversio:
+      llama-3-8b:
         context_length: 128000
 ```
 
@@ -180,12 +180,12 @@ Relevant files:
 `.env` should include:
 
 ```bash
-HERMES_MODEL=autoversio
+HERMES_MODEL=llama-3-8b
 OPENAI_API_KEY=...
 FLOWWINK_API_KEY=...
 ```
 
-Do not use stale `openai/gpt-4o-mini` values with the private endpoint; it only exposes `autoversio`.
+Do not use stale `openai/gpt-4o-mini` values with the private endpoint; it only exposes `llama-3-8b`.
 
 ## Flowwink MCP
 

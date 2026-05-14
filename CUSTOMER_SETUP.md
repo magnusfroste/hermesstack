@@ -9,7 +9,7 @@ I Easypanel, lägg till dessa miljövariabler:
 ```bash
 # LLM
 OPENAI_API_KEY=sk-...
-HERMES_MODEL=autoversio
+HERMES_MODEL=llama-3-8b
 
 # Logging
 HERMES_LOG_LEVEL=debug

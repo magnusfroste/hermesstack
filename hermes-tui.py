@@ -769,8 +769,8 @@ class HermesTUI:
         draw_text(self.stdscr, 5, 2, f"Current model: {current}")
         draw_text(self.stdscr, 7, 2, "Available models:")
         models = [
-            "autoversio",
-            "custom:code4:autoversio",
+            "llama-3-8b",
+            "custom:code4:llama-3-8b",
         ]
         for i, m in enumerate(models):
             marker = "\u2192" if m == current else " "

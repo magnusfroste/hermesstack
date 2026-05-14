@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     environment:
       - HERMES_HOME=/data/hermes-profiles/customer
-      - HERMES_MODEL=${HERMES_MODEL:-autoversio}
+      - HERMES_MODEL=${HERMES_MODEL:-llama-3-8b}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - PROFILE_ROLE=customer
@@ -38,7 +38,7 @@ services:
     restart: unless-stopped
     environment:
       - HERMES_HOME=/data/hermes-profiles/operator
-      - HERMES_MODEL=${HERMES_MODEL:-autoversio}
+      - HERMES_MODEL=${HERMES_MODEL:-llama-3-8b}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - FLOWWINK_API_KEY=${FLOWWINK_API_KEY}
@@ -68,7 +68,7 @@ services:
     restart: unless-stopped
     environment:
       - HERMES_HOME=/data/hermes-profiles/supplier
-      - HERMES_MODEL=${HERMES_MODEL:-autoversio}
+      - HERMES_MODEL=${HERMES_MODEL:-llama-3-8b}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - PROFILE_ROLE=supplier

@@ -38,18 +38,18 @@ toolsets:
 # Default model / private OpenAI-compatible endpoint
 model:
   provider: custom
-  default: autoversio
-  base_url: https://code4.autoversio.ai/v1
+  default: llama-3-8b
+  base_url: https://code4.llama-3-8b.ai/v1
   api_mode: chat_completions
 
 custom_providers:
   - name: code4
-    base_url: https://code4.autoversio.ai/v1
+    base_url: https://code4.llama-3-8b.ai/v1
     key_env: OPENAI_API_KEY
     api_mode: chat_completions
-    model: autoversio
+    model: llama-3-8b
     models:
-      autoversio:
+      llama-3-8b:
         context_length: 128000
 
 # Visningsinställningar

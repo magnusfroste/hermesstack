@@ -6,7 +6,7 @@ The goal is not to make every optional tool work immediately. The goal is:
 
 1. Official Hermes web UI loads and can save config.
 2. `hermes-operator` is healthy.
-3. Private LLM `autoversio` works.
+3. Private LLM `llama-3-8b` works.
 4. Flowwink MCP works from the operator.
 5. Optional tools are diagnosed as setup gaps, not mistaken for core UI failures.
 
@@ -113,25 +113,25 @@ curl -fsS -H "X-Hermes-Session-Token: $token" https://operator.froste.eu/api/con
 
 ## 4. Private LLM Should Use Custom Provider Format
 
-The private endpoint is OpenAI-compatible and serves model `autoversio`.
+The private endpoint is OpenAI-compatible and serves model `llama-3-8b`.
 
 Use:
 
 ```yaml
 model:
   provider: custom
-  default: autoversio
-  base_url: https://code4.autoversio.ai/v1
+  default: llama-3-8b
+  base_url: https://code4.llama-3-8b.ai/v1
   api_mode: chat_completions
 
 custom_providers:
   - name: code4
-    base_url: https://code4.autoversio.ai/v1
+    base_url: https://code4.llama-3-8b.ai/v1
     key_env: OPENAI_API_KEY
     api_mode: chat_completions
-    model: autoversio
+    model: llama-3-8b
     models:
-      autoversio:
+      llama-3-8b:
         context_length: 128000
 ```
 
@@ -231,13 +231,13 @@ Before debugging optional tools, check these:
 ```bash
 docker compose -f docker-compose.yml --env-file .env ps
 curl -fsS -o /dev/null -w 'operator %{http_code}\n' https://operator.froste.eu/
-docker exec hermes-operator /bin/sh -lc '. /opt/hermes/.venv/bin/activate && hermes -z "Svara med endast orden: autoversio aktiv"'
+docker exec hermes-operator /bin/sh -lc '. /opt/hermes/.venv/bin/activate && hermes -z "Svara med endast orden: llama-3-8b aktiv"'
 ```
 
 Expected:
 
 - Operator container is `healthy`.
 - Operator UI returns `200`.
-- Hermes answers `autoversio aktiv`.
+- Hermes answers `llama-3-8b aktiv`.
 
 If all three pass, the core containerized Hermes stack is functioning.

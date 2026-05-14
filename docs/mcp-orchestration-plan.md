@@ -38,7 +38,7 @@ Input:
   "domain": "researcher.froste.eu",
   "port": 3004,
   "profile_template": "operator",
-  "model": "autoversio",
+  "model": "llama-3-8b",
   "toolsets": ["core", "web_search", "terminal", "files", "delegate"]
 }
 ```

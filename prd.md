@@ -13,7 +13,7 @@ Chat verified via `hermes -z`; dashboards HTTP 200; Caddy reverse proxy working.
 
 ## Achieved
 - Official Docker image, venv-activated CLI
-- Private LLM (`autoversio` at `https://code4.autoversio.ai/v1`) configured in all profiles
+- Private LLM (`llama-3-8b` at `https://code4.llama-3-8b.ai/v1`) configured in all profiles
 - Caddy headers fixed (`X-Hermes-Session-Token`, OPTIONS preflight)
 - Config mounts writable; dashboard persistence OK
 - Flowwink API key updated in `.env` and operator profile

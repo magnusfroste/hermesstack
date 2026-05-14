@@ -14,8 +14,8 @@ The current priority is the official Hermes dashboard/web UI and a working opera
 - Dashboard: started by the official image entrypoint with `HERMES_DASHBOARD=1`
 - Embedded web chat: enabled with `HERMES_DASHBOARD_TUI=1`
 - Reverse proxy: Caddy on ports `80` and `443`
-- Private LLM endpoint: `https://code4.autoversio.ai/v1`
-- Model: `autoversio`
+- Private LLM endpoint: `https://code4.llama-3-8b.ai/v1`
+- Model: `llama-3-8b`
 - Flowwink MCP: configured on the operator profile
 
 Access URLs:
@@ -66,18 +66,18 @@ The profiles use Hermes' canonical custom provider format:
 ```yaml
 model:
   provider: custom
-  default: autoversio
-  base_url: https://code4.autoversio.ai/v1
+  default: llama-3-8b
+  base_url: https://code4.llama-3-8b.ai/v1
   api_mode: chat_completions
 
 custom_providers:
   - name: code4
-    base_url: https://code4.autoversio.ai/v1
+    base_url: https://code4.llama-3-8b.ai/v1
     key_env: OPENAI_API_KEY
     api_mode: chat_completions
-    model: autoversio
+    model: llama-3-8b
     models:
-      autoversio:
+      llama-3-8b:
         context_length: 128000
 ```
 
@@ -90,25 +90,25 @@ Files:
 The `.env` file should also use:
 
 ```bash
-HERMES_MODEL=autoversio
+HERMES_MODEL=llama-3-8b
 ```
 
 The private endpoint exposes OpenAI-compatible endpoints:
 
 ```bash
-curl https://code4.autoversio.ai/v1/models
+curl https://code4.llama-3-8b.ai/v1/models
 ```
 
 A quick in-container model test:
 
 ```bash
-docker exec hermes-operator /bin/sh -lc '. /opt/hermes/.venv/bin/activate && hermes -z "Svara med endast orden: autoversio aktiv"'
+docker exec hermes-operator /bin/sh -lc '. /opt/hermes/.venv/bin/activate && hermes -z "Svara med endast orden: llama-3-8b aktiv"'
 ```
 
 Expected output:
 
 ```text
-autoversio aktiv
+llama-3-8b aktiv
 ```
 
 ## Operator And Flowwink
@@ -230,7 +230,7 @@ Error:
 The model `openai/gpt-4o-mini` does not exist
 ```
 
-Cause: stale session/config/env still points at the old model while the private endpoint only serves `autoversio`.
+Cause: stale session/config/env still points at the old model while the private endpoint only serves `llama-3-8b`.
 
 Fix:
 
@@ -239,7 +239,7 @@ grep -R "gpt-4o-mini\|openai/gpt-4o-mini" -n .
 docker exec hermes-operator /bin/sh -lc 'grep -R "gpt-4o-mini\|openai/gpt-4o-mini" -n /data/hermes-profiles/operator 2>/dev/null || true'
 ```
 
-Then update stale values to `autoversio`, recreate containers, and start a new dashboard chat session.
+Then update stale values to `llama-3-8b`, recreate containers, and start a new dashboard chat session.
 
 ### Dashboard Loads But API Fails With 401
 
