@@ -1,14 +1,3 @@
 {
-  "instances": [
-    {
-      "name": "operator",
-      "label": "Operator Agent",
-      "domain": "operator.froste.eu",
-      "port": 3002,
-      "container": "hermes-operator",
-      "emoji": "⚙️",
-      "profile": "operator",
-      "active": true
-    }
-  ]
+  "instances": []
 }

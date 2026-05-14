@@ -428,26 +428,31 @@ class HermesTUI:
         self.stdscr = stdscr
         self.selected = 0
         instances = load_instances()
-        self.menu_items = [
-            ("1", "Status Dashboard", self.show_dashboard),
-            ("2", "Update All Agents", self.update_agents),
-            ("3", "Change Model", self.change_model),
-            ("4", "View Logs", self.view_logs),
-            ("5", "Restart Agent", self.restart_agent),
-            ("6", "Test API / Flowwink", self.test_api),
-            ("7", "Environment Config", self.edit_env),
-            ("8", "Config Files", self.config_files),
-            ("9", "Fleet / Images", self.fleet_panel),
-        ]
         if not instances:
-            self.menu_items.append(("f", "Create First Hermes", self.create_first_hermes))
-        self.menu_items += [
-            ("a", "Add Instance", self.add_instance),
-            ("0", "Remove Instance", self.remove_instance),
-            ("m", "MCP Orchestration", self.mcp_panel),
-            ("c", "Chat with Agent", self.chat_agent),
-            ("q", "Quit", None),
-        ]
+            # First-run: only show "Create First Hermes" and Quit
+            self.menu_items = [
+                ("f", "★  Create First Hermes — Setup your first agent  ★", self.create_first_hermes),
+                ("q", "Quit", None),
+            ]
+            self.first_run = True
+        else:
+            self.first_run = False
+            self.menu_items = [
+                ("1", "Status Dashboard", self.show_dashboard),
+                ("2", "Update All Agents", self.update_agents),
+                ("3", "Change Model", self.change_model),
+                ("4", "View Logs", self.view_logs),
+                ("5", "Restart Agent", self.restart_agent),
+                ("6", "Test API / Flowwink", self.test_api),
+                ("7", "Environment Config", self.edit_env),
+                ("8", "Config Files", self.config_files),
+                ("9", "Fleet / Images", self.fleet_panel),
+                ("a", "Add Instance", self.add_instance),
+                ("0", "Remove Instance", self.remove_instance),
+                ("m", "MCP Orchestration", self.mcp_panel),
+                ("c", "Chat with Agent", self.chat_agent),
+                ("q", "Quit", None),
+            ]
 
     def run(self):
         init_colors()
@@ -504,25 +509,44 @@ class HermesTUI:
 
     def draw_header(self):
         h, w = self.stdscr.getmaxyx()
-        title = " HERMES MULTI-AGENT TUI "
+        if self.first_run:
+            title = " HERMESHOTEL — FIRST RUN "
+            subtitle = "  Welcome! Press Enter to create your first Hermes agent.  "
+        else:
+            title = " HERMES MULTI-AGENT TUI "
+            subtitle = None
         draw_arcane_box(self.stdscr, 0, 0, 2, w - 1, curses.color_pair(6) | curses.A_BOLD)
         draw_text(self.stdscr, 1, (w - len(title)) // 2, title,
                   curses.color_pair(6) | curses.A_BOLD)
+        if subtitle:
+            draw_text(self.stdscr, 1, (w - len(subtitle)) // 2 + len(title) // 2, subtitle,
+                      curses.color_pair(3) | curses.A_BOLD)
 
     def draw_menu(self):
         y = 4
+        if self.first_run:
+            h, w = self.stdscr.getmaxyx()
+            msg = "No Hermes agents found. Let's set up your first one!"
+            draw_text(self.stdscr, y, center_text(msg, w), msg, curses.color_pair(3) | curses.A_BOLD)
+            y += 1
+            msg2 = "You'll need: OPENAI_API_KEY set in .env, and a domain pointing to this server."
+            draw_text(self.stdscr, y, center_text(msg2, w), msg2, curses.color_pair(8))
+            y += 2
         for key, label, _ in self.menu_items:
             if label == "Quit":
                 y += 1
                 continue
             prefix = "▶ " if self.selected == self.menu_items.index((key, label, _)) else "  "
-            draw_text(self.stdscr, y, 2, f"{prefix}{key}. {label}",
-                      curses.color_pair(2) if self.selected == self.menu_items.index((key, label, _)) else 0)
+            style = curses.color_pair(6) | curses.A_BOLD if self.first_run and self.selected == self.menu_items.index((key, label, _)) else (curses.color_pair(2) if self.selected == self.menu_items.index((key, label, _)) else 0)
+            draw_text(self.stdscr, y, 2, f"{prefix}{key}. {label}", style)
             y += 1
 
     def draw_footer(self):
         h, w = self.stdscr.getmaxyx()
-        footer = " ↑↓ Navigate | Enter Select | R Refresh | Q Quit "
+        if self.first_run:
+            footer = " Press Enter to setup | Q Quit "
+        else:
+            footer = " ↑↓ Navigate | Enter Select | R Refresh | Q Quit "
         draw_arcane_box(self.stdscr, h - 3, 0, h - 1, w - 1, curses.color_pair(6))
         draw_text(self.stdscr, h - 2, (w - len(footer)) // 2, footer,
                   curses.color_pair(6))
