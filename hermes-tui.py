@@ -816,7 +816,7 @@ class HermesTUI:
             elif ch in (ord('c'), ord('C')):
                 draw_text(self.stdscr, prompt_y + 1, 2, "Enter model (provider/name): ")
                 self.stdscr.refresh()
-                new_model = self.stdscr.getstr(prompt_y + 1, 35, 60).decode().strip()
+                new_model = self.stdscr.getstr(prompt_y + 1, 35, 60).decode('utf-8', errors='replace').strip()
             else:
                 return
         finally:
@@ -1263,7 +1263,7 @@ class HermesTUI:
                 curses.echo()
                 curses.curs_set(1)
                 try:
-                    domain = self.stdscr.getstr(5, 45, 40).decode().strip()
+                    domain = self.stdscr.getstr(5, 45, 40).decode('utf-8', errors='replace').strip()
                 finally:
                     curses.noecho()
                     curses.curs_set(0)
@@ -1496,10 +1496,10 @@ class HermesTUI:
         curses.echo()
         curses.curs_set(1)
         try:
-            name = self.stdscr.getstr(6, 30, 20).decode().strip()
-            domain = self.stdscr.getstr(7, 40, 40).decode().strip()
-            api_key = self.stdscr.getstr(8, 35, 60).decode().strip()
-            llm_url = self.stdscr.getstr(9, 45, 60).decode().strip()
+            name = self.stdscr.getstr(6, 30, 20).decode('utf-8', errors='replace').strip()
+            domain = self.stdscr.getstr(7, 40, 40).decode('utf-8', errors='replace').strip()
+            api_key = self.stdscr.getstr(8, 35, 60).decode('utf-8', errors='replace').strip()
+            llm_url = self.stdscr.getstr(9, 45, 60).decode('utf-8', errors='replace').strip()
         finally:
             curses.noecho()
             curses.curs_set(0)
@@ -1582,7 +1582,7 @@ class HermesTUI:
         curses.echo()
         curses.curs_set(1)
         try:
-            lobby_domain = self.stdscr.getstr(7, 2, 50).decode().strip()
+            lobby_domain = self.stdscr.getstr(7, 2, 50).decode('utf-8', errors='replace').strip()
         finally:
             curses.noecho()
             curses.curs_set(0)
@@ -1599,10 +1599,10 @@ class HermesTUI:
         curses.echo()
         curses.curs_set(1)
         try:
-            agent_name = self.stdscr.getstr(5, 28, 20).decode().strip()
-            agent_domain = self.stdscr.getstr(6, 30, 40).decode().strip()
-            api_key = self.stdscr.getstr(7, 30, 60).decode().strip()
-            llm_url = self.stdscr.getstr(8, 30, 60).decode().strip()
+            agent_name = self.stdscr.getstr(5, 28, 20).decode('utf-8', errors='replace').strip()
+            agent_domain = self.stdscr.getstr(6, 30, 40).decode('utf-8', errors='replace').strip()
+            api_key = self.stdscr.getstr(7, 30, 60).decode('utf-8', errors='replace').strip()
+            llm_url = self.stdscr.getstr(8, 30, 60).decode('utf-8', errors='replace').strip()
         finally:
             curses.noecho()
             curses.curs_set(0)
@@ -1777,8 +1777,8 @@ class HermesTUI:
         curses.echo()
         curses.curs_set(1)
         try:
-            name = self.stdscr.getstr(5, 40, 20).decode().strip()
-            domain = self.stdscr.getstr(6, 40, 40).decode().strip()
+            name = self.stdscr.getstr(5, 40, 20).decode('utf-8', errors='replace').strip()
+            domain = self.stdscr.getstr(6, 40, 40).decode('utf-8', errors='replace').strip()
         finally:
             curses.noecho()
             curses.curs_set(0)
@@ -1870,7 +1870,7 @@ class HermesTUI:
 
                 try:
                     input_bytes = self.stdscr.getstr(5, 4, w - 10)
-                    user_input = input_bytes.decode().strip()
+                    user_input = input_bytes.decode('utf-8', errors='replace').strip()
                 except Exception:
                     break
 
