@@ -1715,10 +1715,10 @@ class HermesTUI:
             subprocess.run(["caddy", "reload", "--config", caddy_file],
                            capture_output=True, text=True, timeout=10)
         else:
-            # Start Caddy in daemon mode
-            subprocess.run(["caddy", "start", "--config", caddy_file],
+            # Start Caddy in daemon mode (background)
+            subprocess.run(["caddy", "start", "--config", caddy_file, "--daemon"],
                            capture_output=True, text=True, timeout=15)
-            time.sleep(2)
+            time.sleep(3)
 
         # Verify Caddy
         caddy_ok = False
