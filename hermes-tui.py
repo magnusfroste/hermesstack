@@ -1617,12 +1617,41 @@ class HermesTUI:
         if not llm_url:
             llm_url = "https://api.openai.com/v1"
 
-        # ── Step 3: Configure Caddy + .env ──
+        # ── Step 3: Start Caddy first (minimal config) ──
         self.stdscr.erase()
-        draw_text(self.stdscr, 1, 2, " STEP 3/4 — Configuring... ", curses.color_pair(6) | curses.A_BOLD)
+        draw_text(self.stdscr, 1, 2, " STEP 3/4 — Starting services... ", curses.color_pair(6) | curses.A_BOLD)
         draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
-        draw_text(self.stdscr, 5, 2, "Writing .env...", curses.color_pair(3))
+        draw_text(self.stdscr, 5, 2, "Starting Caddy...", curses.color_pair(3))
         self.stdscr.refresh()
+
+        caddy_file = "/etc/caddy/Caddyfile"
+        
+        # Check if Caddy is already running
+        caddy_running = False
+        try:
+            result = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                                     "http://localhost:2019/"],
+                                    capture_output=True, text=True, timeout=5)
+            if result.stdout.strip() == "200":
+                caddy_running = True
+        except Exception:
+            pass
+
+        if not caddy_running:
+            # Start Caddy with minimal config first
+            minimal_caddy = """{
+    admin localhost:2019
+}
+"""
+            with open(caddy_file, "w") as f:
+                f.write(minimal_caddy)
+            os.system(f"nohup caddy start --config {caddy_file} > /dev/null 2>&1 &")
+            time.sleep(4)
+        
+        draw_text(self.stdscr, 6, 2, "Writing .env...", curses.color_pair(3))
+        self.stdscr.refresh()
+        
+        # Update .env
         env_path = "/opt/hermeshotel/.env"
         try:
             with open(env_path) as f:
@@ -1640,14 +1669,29 @@ class HermesTUI:
         with open(env_path, "w") as f:
             f.writelines(new_env)
 
-        # Create /etc/caddy/Caddyfile from scratch
-        draw_text(self.stdscr, 6, 2, "Writing Caddyfile...", curses.color_pair(3))
-        draw_text(self.stdscr, 7, 2, f"  Agent: {agent_domain} → localhost:3001", curses.color_pair(10))
-        if lobby_domain:
-            draw_text(self.stdscr, 8, 2, f"  Lobby: {lobby_domain} → localhost:3099", curses.color_pair(10))
+        # Run add-hermes.sh to create the agent container
+        draw_text(self.stdscr, 7, 2, "Creating Hermes agent...", curses.color_pair(3))
         self.stdscr.refresh()
 
-        caddy_file = "/etc/caddy/Caddyfile"
+        add_script = "/opt/hermeshotel/scripts/add-hermes.sh"
+        proc = subprocess.run(
+            ["/bin/bash", add_script, agent_name, agent_domain],
+            capture_output=True, text=True, cwd="/opt/hermeshotel", timeout=120
+        )
+
+        if proc.returncode != 0:
+            self.message_screen("Wizard", [f"Setup failed: {proc.stderr[:300]}"])
+            return
+
+        # Start Lobby if domain provided
+        if lobby_domain:
+            subprocess.run(["docker", "compose", "-f", "docker-compose.yml", "up", "-d", "hermes-lobby"],
+                           cwd="/opt/hermeshotel", capture_output=True)
+
+        # ── Step 4: Update Caddyfile with domains ──
+        draw_text(self.stdscr, 8, 2, "Configuring Caddy domains...", curses.color_pair(3))
+        self.stdscr.refresh()
+
         caddy_content = """{
     admin localhost:2019
 }
@@ -1682,42 +1726,10 @@ class HermesTUI:
         with open(caddy_file, "w") as f:
             f.write(caddy_content)
 
-        # Run add-hermes.sh
-        draw_text(self.stdscr, 9, 2, "Running add-hermes.sh...", curses.color_pair(3))
-        self.stdscr.refresh()
-
-        add_script = "/opt/hermeshotel/scripts/add-hermes.sh"
-        proc = subprocess.run(
-            ["/bin/bash", add_script, agent_name, agent_domain],
-            capture_output=True, text=True, cwd="/opt/hermeshotel", timeout=120
-        )
-
-        if proc.returncode != 0:
-            self.message_screen("Wizard", [f"Setup failed: {proc.stderr[:300]}"])
-            return
-
-        # Start Caddy
-        draw_text(self.stdscr, 10, 2, "Starting Caddy...", curses.color_pair(3))
-        self.stdscr.refresh()
-
-        # Check if Caddy is already running
-        caddy_running = False
-        try:
-            result = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
-                                     "http://localhost:2019/"],
-                                    capture_output=True, text=True, timeout=5)
-            if result.stdout.strip() == "200":
-                caddy_running = True
-        except Exception:
-            pass
-
-        if caddy_running:
-            subprocess.run(["caddy", "reload", "--config", caddy_file],
-                           capture_output=True, text=True, timeout=10)
-        else:
-            # Start Caddy in background via shell (most reliable method)
-            os.system(f"nohup caddy start --config {caddy_file} > /dev/null 2>&1 &")
-            time.sleep(5)
+        # Reload Caddy with new domains
+        subprocess.run(["caddy", "reload", "--config", caddy_file],
+                       capture_output=True, text=True, timeout=10)
+        time.sleep(2)
 
         # Verify Caddy
         caddy_ok = False
