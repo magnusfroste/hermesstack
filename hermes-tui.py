@@ -1285,10 +1285,19 @@ class HermesTUI:
                 self.message_screen("Web Panel", [f"Web panel {action}ed"])
                 return
             elif key in (ord('r'), ord('R')):
+                # Try reload first, if fails try start
                 result = subprocess.run(["caddy", "reload", "--config", caddy_file],
-                                        capture_output=True, text=True)
+                                        capture_output=True, text=True, timeout=10)
                 if result.returncode == 0:
                     self.message_screen("Web Panel", ["Caddy reloaded"])
+                elif "connection refused" in result.stderr.lower():
+                    # Caddy not running — start it
+                    result = subprocess.run(["caddy", "start", "--config", caddy_file],
+                                            capture_output=True, text=True, timeout=15)
+                    if result.returncode == 0:
+                        self.message_screen("Web Panel", ["Caddy started"])
+                    else:
+                        self.message_screen("Web Panel", [f"Caddy start failed: {result.stderr[:200]}"])
                 else:
                     self.message_screen("Web Panel", [f"Caddy reload failed: {result.stderr[:200]}"])
 
