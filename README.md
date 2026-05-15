@@ -40,7 +40,7 @@ hermeshotel/
 |-------------------|-------------------|------------|
 | Hermes Agent      | hermes-<name>     | 3000+      |
 | Redis             | hermes-redis      | internal   |
-| Light status web  | hermeshotel-web   | 3099       |
+| Light status web  | hermes-lobby   | 3099       |
 
 ## VPS Deployment
 

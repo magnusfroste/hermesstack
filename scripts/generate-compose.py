@@ -87,11 +87,11 @@ def main():
     lines.append("      - hermes-network")
     lines.append("    command: redis-server --appendonly yes")
 
-    # hermeshotel-web
+    # hermes-lobby
     lines.append("")
-    lines.append("  hermeshotel-web:")
+    lines.append("  hermes-lobby:")
     lines.append("    image: python:3.12-alpine")
-    lines.append("    container_name: hermeshotel-web")
+    lines.append("    container_name: hermes-lobby")
     lines.append("    restart: unless-stopped")
     lines.append("    working_dir: /app")
     lines.append("    environment:")

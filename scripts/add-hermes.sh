@@ -125,8 +125,8 @@ info "Starting hermes-$PROFILE"
 docker compose -f docker-compose.yml up -d "hermes-$PROFILE"
 
 # Start web panel (always runs alongside agents)
-info "Starting hermeshotel-web"
-docker compose -f docker-compose.yml up -d hermeshotel-web
+info "Starting hermes-lobby"
+docker compose -f docker-compose.yml up -d hermes-lobby
 
 echo ""
 info "Added hermes-$PROFILE successfully"

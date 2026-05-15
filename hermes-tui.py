@@ -432,7 +432,7 @@ class HermesTUI:
             # First-run: only show "Create First Hermes" and Quit
             self.menu_items = [
                 ("f", "★  Create First Hermes — Setup your first agent  ★", self.create_first_hermes),
-                ("w", "Web Panel — Configure status panel domain", self.web_panel_config),
+                ("w", "Lobby — Configure status panel domain", self.lobby_config),
                 ("q", "Quit", None),
             ]
             self.first_run = True
@@ -450,7 +450,7 @@ class HermesTUI:
                 ("9", "Fleet / Images", self.fleet_panel),
                 ("a", "Add Instance", self.add_instance),
                 ("0", "Remove Instance", self.remove_instance),
-                ("w", "Web Panel", self.web_panel_config),
+                ("w", "Lobby", self.lobby_config),
                 ("m", "MCP Orchestration", self.mcp_panel),
                 ("c", "Chat with Agent", self.chat_agent),
                 ("q", "Quit", None),
@@ -505,7 +505,7 @@ class HermesTUI:
             elif key in (ord('m'), ord('M')):
                 self.mcp_panel()
             elif key in (ord('w'), ord('W')):
-                self.web_panel_config()
+                self.lobby_config()
             elif key in (ord('f'), ord('F')):
                 self.create_first_hermes()
             elif key in (ord('c'), ord('C')):
@@ -1203,7 +1203,7 @@ class HermesTUI:
         ]
         self.message_screen("MCP Orchestration", lines)
 
-    def web_panel_config(self):
+    def lobby_config(self):
         """Configure the HermesHotel web panel — domain, start/stop."""
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
@@ -1238,7 +1238,7 @@ class HermesTUI:
             "",
             "Options:",
             "  d. Set Caddy Domain",
-            f"  {'s' if web_running else 'S'}. {'Stop' if web_running else 'Start'} Web Panel",
+            f"  {'s' if web_running else 'S'}. {'Stop' if web_running else 'Start'} Lobby",
             "  r. Reload Caddy",
             "",
         ]
@@ -1269,7 +1269,7 @@ class HermesTUI:
                 if domain:
                     # Update Caddyfile
                     if not os.path.exists(caddy_file):
-                        self.message_screen("Web Panel", [f"Caddyfile not found at {caddy_file}"])
+                        self.message_screen("Lobby", [f"Caddyfile not found at {caddy_file}"])
                         continue
                     # Remove old hermeshotel block if exists
                     with open(caddy_file) as f:
@@ -1277,29 +1277,29 @@ class HermesTUI:
                     # Simple approach: append new block
                     with open(caddy_file, "a") as f:
                         f.write(f"\n{domain} {{\n    reverse_proxy localhost:3099\n}}\n")
-                    self.message_screen("Web Panel", [f"Added {domain} → localhost:3099 to Caddyfile", "Press 'r' to reload Caddy"])
+                    self.message_screen("Lobby", [f"Added {domain} → localhost:3099 to Caddyfile", "Press 'r' to reload Caddy"])
             elif key in (ord('s'), ord('S')):
                 action = "start" if not web_running else "stop"
                 subprocess.run(["docker", "compose", "-f", "docker-compose.yml", action, "hermeshotel-web"],
                                cwd="/opt/hermeshotel", capture_output=True)
-                self.message_screen("Web Panel", [f"Web panel {action}ed"])
+                self.message_screen("Lobby", [f"Web panel {action}ed"])
                 return
             elif key in (ord('r'), ord('R')):
                 # Try reload first, if fails try start
                 result = subprocess.run(["caddy", "reload", "--config", caddy_file],
                                         capture_output=True, text=True, timeout=10)
                 if result.returncode == 0:
-                    self.message_screen("Web Panel", ["Caddy reloaded"])
+                    self.message_screen("Lobby", ["Caddy reloaded"])
                 elif "connection refused" in result.stderr.lower():
                     # Caddy not running — start it
                     result = subprocess.run(["caddy", "start", "--config", caddy_file],
                                             capture_output=True, text=True, timeout=15)
                     if result.returncode == 0:
-                        self.message_screen("Web Panel", ["Caddy started"])
+                        self.message_screen("Lobby", ["Caddy started"])
                     else:
-                        self.message_screen("Web Panel", [f"Caddy start failed: {result.stderr[:200]}"])
+                        self.message_screen("Lobby", [f"Caddy start failed: {result.stderr[:200]}"])
                 else:
-                    self.message_screen("Web Panel", [f"Caddy reload failed: {result.stderr[:200]}"])
+                    self.message_screen("Lobby", [f"Caddy reload failed: {result.stderr[:200]}"])
 
     def config_files(self):
         """Browse, view, validate, and edit stack config files."""

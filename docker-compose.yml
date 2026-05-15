@@ -3,35 +3,6 @@
 
 services:
 
-  hermes-operator:
-    image: nousresearch/hermes-agent:latest
-    container_name: hermes-operator
-    restart: unless-stopped
-    environment:
-      - HERMES_HOME=/data/hermes-profiles/operator
-      - HERMES_MODEL=${HERMES_MODEL:-gpt-4.1}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - PROFILE_ROLE=operator
-      - HERMES_SESSION_TOKEN=${HERMES_SESSION_TOKEN}
-      - HERMES_DASHBOARD=1
-      - HERMES_DASHBOARD_HOST=0.0.0.0
-      - HERMES_DASHBOARD_PORT=3000
-      - HERMES_DASHBOARD_TUI=1
-    volumes:
-      - operator-data:/data/hermes-profiles/operator
-      - /opt/hermeshotel/profiles/operator/config.yaml:/data/hermes-profiles/operator/config.yaml
-    ports:
-      - "127.0.0.1:3001:3000"
-    command: ["sleep", "infinity"]
-    networks:
-      - hermes-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
   redis:
     image: redis:7-alpine
     container_name: hermes-redis
@@ -42,9 +13,9 @@ services:
       - hermes-network
     command: redis-server --appendonly yes
 
-  hermeshotel-web:
+  hermes-lobby:
     image: python:3.12-alpine
-    container_name: hermeshotel-web
+    container_name: hermes-lobby
     restart: unless-stopped
     working_dir: /app
     environment:
@@ -59,11 +30,8 @@ services:
     command: ["python", "/app/hermes-web.py"]
     networks:
       - hermes-network
-    depends_on:
-      - hermes-operator
 
 volumes:
-  operator-data:
   redis-data:
 
 networks:
