@@ -1715,12 +1715,8 @@ class HermesTUI:
             subprocess.run(["caddy", "reload", "--config", caddy_file],
                            capture_output=True, text=True, timeout=10)
         else:
-            # Start Caddy in background without blocking
-            subprocess.Popen(
-                ["caddy", "start", "--config", caddy_file],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
+            # Start Caddy in background via shell (most reliable method)
+            os.system(f"nohup caddy start --config {caddy_file} > /dev/null 2>&1 &")
             time.sleep(5)
 
         # Verify Caddy
