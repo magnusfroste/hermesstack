@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     environment:
       - HERMES_HOME=/data/hermes-profiles/operator
-      - HERMES_MODEL=${HERMES_MODEL:-gpt-4.1}
+      - HERMES_MODEL=${HERMES_MODEL:-openai/gpt-4.1}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - PROFILE_ROLE=operator

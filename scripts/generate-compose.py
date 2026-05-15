@@ -32,7 +32,7 @@ def agent_block(profile: str, inst: dict) -> str:
         f"    restart: unless-stopped",
         f"    environment:",
         f"      - HERMES_HOME=/data/hermes-profiles/{profile}",
-        f"      - HERMES_MODEL=${{HERMES_MODEL:-gpt-4.1}}",
+        f"      - HERMES_MODEL=${{HERMES_MODEL:-openai/gpt-4.1}}",
         f"      - OPENAI_API_KEY=${{OPENAI_API_KEY}}",
         f"      - ANTHROPIC_API_KEY=${{ANTHROPIC_API_KEY}}",
     ]

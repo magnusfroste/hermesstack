@@ -71,17 +71,7 @@ dashboard:
   theme: default
 
 model:
-  provider: custom
+  provider: openai
   default: gpt-4.1
-  base_url: https://api.openai.com/v1
   api_mode: chat_completions
 
-custom_providers:
-  - name: custom_llm
-    base_url: https://api.openai.com/v1
-    key_env: OPENAI_API_KEY
-    api_mode: chat_completions
-    model: gpt-4.1
-    models:
-      gpt-4.1:
-        context_length: 128000

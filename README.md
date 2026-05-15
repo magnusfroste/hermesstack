@@ -115,7 +115,7 @@ sudo caddy reload           # after editing config/Caddyfile
 ### .env (root)
 ```env
 OPENAI_API_KEY=sk-…
-HERMES_MODEL=gpt-4.1
+HERMES_MODEL=openai/gpt-4.1
 LLM_BASE_URL=https://api.openai.com/v1
 FLOWWINK_API_KEY=fwk_…        # optional, for MCP
 HERMES_OPERATOR_TOKEN=…        # auto-generated
@@ -145,7 +145,7 @@ custom_providers:
     base_url: https://api.openai.com/v1
     key_env: OPENAI_API_KEY
     api_mode: chat_completions
-    model: gpt-4.1
+    model: openai/gpt-4.1
     models:
       gpt-4.1:
         context_length: 128000
