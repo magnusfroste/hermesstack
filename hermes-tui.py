@@ -429,10 +429,9 @@ class HermesTUI:
         self.selected = 0
         instances = load_instances()
         if not instances:
-            # First-run: only show "Create First Hermes" and Quit
             self.menu_items = [
-                ("f", "★  Create First Hermes — Setup your first agent  ★", self.create_first_hermes),
-                ("w", "Lobby — Configure status panel domain", self.lobby_config),
+                ("s", "★  Setup Wizard — Full first-run installation  ★", self.setup_wizard),
+                ("w", "Lobby — Configure status panel", self.lobby_config),
                 ("q", "Quit", None),
             ]
             self.first_run = True
@@ -506,6 +505,8 @@ class HermesTUI:
                 self.mcp_panel()
             elif key in (ord('w'), ord('W')):
                 self.lobby_config()
+            elif key in (ord('s'), ord('S')):
+                self.setup_wizard()
             elif key in (ord('f'), ord('F')):
                 self.create_first_hermes()
             elif key in (ord('c'), ord('C')):
@@ -1553,6 +1554,155 @@ class HermesTUI:
             "Container is starting... wait ~15s then visit:",
             f"  https://{domain}"
         ])
+
+    def setup_wizard(self):
+        """Full first-run wizard: Lobby + Hermes agent + Caddy + start."""
+        self.stdscr.erase()
+        h, w = self.stdscr.getmaxyx()
+
+        # ── Welcome ──
+        title = " HERMESHOTEL SETUP WIZARD "
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6) | curses.A_BOLD)
+        draw_text(self.stdscr, 1, (w - len(title)) // 2, title, curses.color_pair(6) | curses.A_BOLD)
+        draw_text(self.stdscr, 5, 2, "Welcome! This wizard will set up your first Hermes deployment.", curses.color_pair(3))
+        draw_text(self.stdscr, 6, 2, "You'll configure Lobby (status panel), a Hermes agent, and Caddy (HTTPS).", curses.color_pair(3))
+        draw_text(self.stdscr, 7, 2, "Press Enter to begin, or q to cancel.")
+        self.stdscr.refresh()
+        key = self.stdscr.getch()
+        if key in (ord('q'), ord('Q'), 27):
+            return
+
+        # ── Step 1: Lobby Domain ──
+        self.stdscr.erase()
+        draw_text(self.stdscr, 1, 2, " STEP 1/4 — Lobby Domain ", curses.color_pair(6) | curses.A_BOLD)
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_text(self.stdscr, 5, 2, "Domain for Lobby status panel (optional, e.g. lobby.example.com):")
+        draw_text(self.stdscr, 6, 2, "Leave empty to skip — you can configure it later via 'w. Lobby'")
+        self.stdscr.refresh()
+        curses.echo()
+        curses.curs_set(1)
+        try:
+            lobby_domain = self.stdscr.getstr(7, 2, 50).decode().strip()
+        finally:
+            curses.noecho()
+            curses.curs_set(0)
+
+        # ── Step 2: Hermes Agent ──
+        self.stdscr.erase()
+        draw_text(self.stdscr, 1, 2, " STEP 2/4 — First Hermes Agent ", curses.color_pair(6) | curses.A_BOLD)
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_text(self.stdscr, 5, 2, "Name (e.g. operator): ")
+        draw_text(self.stdscr, 6, 2, "Domain (e.g. operator.example.com): ")
+        draw_text(self.stdscr, 7, 2, "OpenAI API Key (sk-proj-...): ")
+        draw_text(self.stdscr, 8, 2, "LLM Base URL (https://api.openai.com/v1): ")
+        self.stdscr.refresh()
+        curses.echo()
+        curses.curs_set(1)
+        try:
+            agent_name = self.stdscr.getstr(5, 28, 20).decode().strip()
+            agent_domain = self.stdscr.getstr(6, 30, 40).decode().strip()
+            api_key = self.stdscr.getstr(7, 30, 60).decode().strip()
+            llm_url = self.stdscr.getstr(8, 30, 60).decode().strip()
+        finally:
+            curses.noecho()
+            curses.curs_set(0)
+        if not agent_name:
+            agent_name = "operator"
+        if not agent_domain:
+            self.message_screen("Wizard", ["Agent domain is required."])
+            return
+        if not api_key:
+            self.message_screen("Wizard", ["OpenAI API Key is required."])
+            return
+        if not llm_url:
+            llm_url = "https://api.openai.com/v1"
+
+        # ── Step 3: Update .env ──
+        self.stdscr.erase()
+        draw_text(self.stdscr, 1, 2, " STEP 3/4 — Configuring... ", curses.color_pair(6) | curses.A_BOLD)
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        draw_text(self.stdscr, 5, 2, "Writing .env...", curses.color_pair(3))
+        self.stdscr.refresh()
+        env_path = "/opt/hermeshotel/.env"
+        try:
+            with open(env_path) as f:
+                env_lines = f.readlines()
+        except FileNotFoundError:
+            env_lines = []
+        new_env = []
+        for line in env_lines:
+            if line.startswith("OPENAI_API_KEY="):
+                new_env.append(f"OPENAI_API_KEY={api_key}\n")
+            elif line.startswith("LLM_BASE_URL="):
+                new_env.append(f"LLM_BASE_URL={llm_url}\n")
+            else:
+                new_env.append(line)
+        with open(env_path, "w") as f:
+            f.writelines(new_env)
+        draw_text(self.stdscr, 6, 2, "Running add-hermes.sh...", curses.color_pair(3))
+        self.stdscr.refresh()
+
+        # ── Step 4: Create Agent ──
+        add_script = "/opt/hermeshotel/scripts/add-hermes.sh"
+        proc = subprocess.run(
+            ["/bin/bash", add_script, agent_name, agent_domain],
+            capture_output=True, text=True, cwd="/opt/hermeshotel", timeout=120
+        )
+
+        if proc.returncode != 0:
+            self.message_screen("Wizard", [f"Setup failed: {proc.stderr[:300]}"])
+            return
+
+        # Configure Lobby domain if provided
+        caddy_file = "/etc/caddy/Caddyfile"
+        if lobby_domain:
+            if os.path.exists(caddy_file):
+                with open(caddy_file, "a") as f:
+                    f.write(f"\n{lobby_domain} {{\n    reverse_proxy localhost:3099\n}}\n")
+            # Start Lobby
+            subprocess.run(["docker", "compose", "-f", "docker-compose.yml", "up", "-d", "hermes-lobby"],
+                           cwd="/opt/hermeshotel", capture_output=True)
+
+        # Reload Caddy if running
+        result = subprocess.run(["caddy", "validate", "--config", caddy_file],
+                                capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            subprocess.run(["caddy", "reload", "--config", caddy_file],
+                           capture_output=True, text=True, timeout=10)
+
+        # Reload agents
+        global AGENTS
+        AGENTS = get_agents()
+
+        # ── Summary ──
+        self.stdscr.erase()
+        draw_text(self.stdscr, 1, 2, " SETUP COMPLETE ", curses.color_pair(6) | curses.A_BOLD)
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+        lines = [
+            f"✔ Hermes Agent: {agent_name}",
+            f"  Domain: https://{agent_domain}",
+            f"  API Key: {api_key[:12]}...",
+            f"  LLM: {llm_url}",
+            "",
+        ]
+        if lobby_domain:
+            lines += [f"✔ Lobby: https://{lobby_domain}", ""]
+        lines += [
+            "Containers are starting... wait ~15s then visit your domains.",
+            "",
+            "Next steps:",
+            "  python3 hermes-tui.py    → manage agents",
+            "  w. Lobby                  → configure status panel",
+            "  a. Add Instance           → add more agents",
+            "",
+            "Press any key to continue."
+        ]
+        y = 5
+        for line in lines:
+            draw_text(self.stdscr, y, 2, line)
+            y += 1
+        self.stdscr.refresh()
+        self.stdscr.getch()
 
     def add_instance(self):
         """Add a new Hermes agent from operator template using scripts/add-hermes.sh."""
