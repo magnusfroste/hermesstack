@@ -432,6 +432,7 @@ class HermesTUI:
             # First-run: only show "Create First Hermes" and Quit
             self.menu_items = [
                 ("f", "★  Create First Hermes — Setup your first agent  ★", self.create_first_hermes),
+                ("w", "Web Panel — Configure status panel domain", self.web_panel_config),
                 ("q", "Quit", None),
             ]
             self.first_run = True
@@ -449,6 +450,7 @@ class HermesTUI:
                 ("9", "Fleet / Images", self.fleet_panel),
                 ("a", "Add Instance", self.add_instance),
                 ("0", "Remove Instance", self.remove_instance),
+                ("w", "Web Panel", self.web_panel_config),
                 ("m", "MCP Orchestration", self.mcp_panel),
                 ("c", "Chat with Agent", self.chat_agent),
                 ("q", "Quit", None),
@@ -502,6 +504,8 @@ class HermesTUI:
                 self.remove_instance()
             elif key in (ord('m'), ord('M')):
                 self.mcp_panel()
+            elif key in (ord('w'), ord('W')):
+                self.web_panel_config()
             elif key in (ord('f'), ord('F')):
                 self.create_first_hermes()
             elif key in (ord('c'), ord('C')):
@@ -1198,6 +1202,95 @@ class HermesTUI:
             "- back it with the same config registry used by TUI option 8",
         ]
         self.message_screen("MCP Orchestration", lines)
+
+    def web_panel_config(self):
+        """Configure the HermesHotel web panel — domain, start/stop."""
+        self.stdscr.erase()
+        h, w = self.stdscr.getmaxyx()
+        draw_text(self.stdscr, 1, 2, " WEB PANEL CONFIG ", curses.color_pair(6) | curses.A_BOLD)
+        draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+
+        # Check if web panel container exists
+        result = subprocess.run(
+            ["docker", "inspect", "hermeshotel-web", "--format", "{{.State.Status}}"],
+            capture_output=True, text=True
+        )
+        web_running = result.returncode == 0 and result.stdout.strip() == "running"
+
+        # Check for domain in Caddyfile
+        caddy_domain = "not configured"
+        caddy_file = "/etc/caddy/Caddyfile"
+        try:
+            with open(caddy_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and not line.startswith("{") and not line.startswith("}") and not line.startswith("(") and "hermeshotel" in line.lower() or "hermeshotel.froste.eu" in line:
+                        if line.endswith("{") or ("hermeshotel" in line and "." in line):
+                            caddy_domain = line.replace(" {", "").strip()
+                            break
+        except FileNotFoundError:
+            pass
+
+        lines = [
+            f"Status: {'RUNNING' if web_running else 'STOPPED'}",
+            f"Caddy domain: {caddy_domain}",
+            f"Port: 3099",
+            "",
+            "Options:",
+            "  d. Set Caddy Domain",
+            f"  {'s' if web_running else 'S'}. {'Stop' if web_running else 'Start'} Web Panel",
+            "  r. Reload Caddy",
+            "",
+        ]
+        y = 5
+        for line in lines:
+            draw_text(self.stdscr, y, 2, line)
+            y += 1
+        draw_text(self.stdscr, y, 2, "q. Back")
+        self.stdscr.refresh()
+
+        while True:
+            key = self.stdscr.getch()
+            if key in (ord('q'), ord('Q'), 27):
+                return
+            elif key in (ord('d'), ord('D')):
+                self.stdscr.erase()
+                draw_text(self.stdscr, 1, 2, " SET WEB PANEL DOMAIN ", curses.color_pair(6) | curses.A_BOLD)
+                draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
+                draw_text(self.stdscr, 5, 2, "Domain (e.g. hermeshotel.example.com): ")
+                self.stdscr.refresh()
+                curses.echo()
+                curses.curs_set(1)
+                try:
+                    domain = self.stdscr.getstr(5, 45, 40).decode().strip()
+                finally:
+                    curses.noecho()
+                    curses.curs_set(0)
+                if domain:
+                    # Update Caddyfile
+                    if not os.path.exists(caddy_file):
+                        self.message_screen("Web Panel", [f"Caddyfile not found at {caddy_file}"])
+                        continue
+                    # Remove old hermeshotel block if exists
+                    with open(caddy_file) as f:
+                        content = f.read()
+                    # Simple approach: append new block
+                    with open(caddy_file, "a") as f:
+                        f.write(f"\n{domain} {{\n    reverse_proxy localhost:3099\n}}\n")
+                    self.message_screen("Web Panel", [f"Added {domain} → localhost:3099 to Caddyfile", "Press 'r' to reload Caddy"])
+            elif key in (ord('s'), ord('S')):
+                action = "start" if not web_running else "stop"
+                subprocess.run(["docker", "compose", "-f", "docker-compose.yml", action, "hermeshotel-web"],
+                               cwd="/opt/hermeshotel", capture_output=True)
+                self.message_screen("Web Panel", [f"Web panel {action}ed"])
+                return
+            elif key in (ord('r'), ord('R')):
+                result = subprocess.run(["caddy", "reload", "--config", caddy_file],
+                                        capture_output=True, text=True)
+                if result.returncode == 0:
+                    self.message_screen("Web Panel", ["Caddy reloaded"])
+                else:
+                    self.message_screen("Web Panel", [f"Caddy reload failed: {result.stderr[:200]}"])
 
     def config_files(self):
         """Browse, view, validate, and edit stack config files."""

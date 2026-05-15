@@ -124,6 +124,10 @@ python3 scripts/generate-compose.py
 info "Starting hermes-$PROFILE"
 docker compose -f docker-compose.yml up -d "hermes-$PROFILE"
 
+# Start web panel (always runs alongside agents)
+info "Starting hermeshotel-web"
+docker compose -f docker-compose.yml up -d hermeshotel-web
+
 echo ""
 info "Added hermes-$PROFILE successfully"
 echo "  Domain: $DOMAIN"
