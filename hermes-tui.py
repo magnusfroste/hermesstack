@@ -1617,7 +1617,7 @@ class HermesTUI:
         if not llm_url:
             llm_url = "https://api.openai.com/v1"
 
-        # ── Step 3: Update .env ──
+        # ── Step 3: Configure Caddy + .env ──
         self.stdscr.erase()
         draw_text(self.stdscr, 1, 2, " STEP 3/4 — Configuring... ", curses.color_pair(6) | curses.A_BOLD)
         draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
@@ -1639,10 +1639,53 @@ class HermesTUI:
                 new_env.append(line)
         with open(env_path, "w") as f:
             f.writelines(new_env)
-        draw_text(self.stdscr, 6, 2, "Running add-hermes.sh...", curses.color_pair(3))
+
+        # Create /etc/caddy/Caddyfile from scratch
+        draw_text(self.stdscr, 6, 2, "Writing Caddyfile...", curses.color_pair(3))
+        draw_text(self.stdscr, 7, 2, f"  Agent: {agent_domain} → localhost:3001", curses.color_pair(10))
+        if lobby_domain:
+            draw_text(self.stdscr, 8, 2, f"  Lobby: {lobby_domain} → localhost:3099", curses.color_pair(10))
         self.stdscr.refresh()
 
-        # ── Step 4: Create Agent ──
+        caddy_file = "/etc/caddy/Caddyfile"
+        caddy_content = """{
+    admin localhost:2019
+}
+
+(hermes_headers) {
+    @options method OPTIONS
+    respond @options 204
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "X-Hermes-Session-Token, Authorization, Content-Type, Accept, Origin, X-Requested-With"
+        Access-Control-Expose-Headers "X-Hermes-Session-Token"
+        Access-Control-Max-Age "3600"
+        Cache-Control "no-store"
+    }
+}
+
+"""
+        caddy_content += f"""{agent_domain} {{
+    import hermes_headers
+    reverse_proxy localhost:3001 {{
+        flush_interval -1
+    }}
+}}
+"""
+        if lobby_domain:
+            caddy_content += f"""
+{lobby_domain} {{
+    reverse_proxy localhost:3099
+}}
+"""
+        with open(caddy_file, "w") as f:
+            f.write(caddy_content)
+
+        # Run add-hermes.sh
+        draw_text(self.stdscr, 9, 2, "Running add-hermes.sh...", curses.color_pair(3))
+        self.stdscr.refresh()
+
         add_script = "/opt/hermeshotel/scripts/add-hermes.sh"
         proc = subprocess.run(
             ["/bin/bash", add_script, agent_name, agent_domain],
@@ -1653,40 +1696,59 @@ class HermesTUI:
             self.message_screen("Wizard", [f"Setup failed: {proc.stderr[:300]}"])
             return
 
-        # Configure Lobby domain if provided
-        caddy_file = "/etc/caddy/Caddyfile"
-        if lobby_domain:
-            if os.path.exists(caddy_file):
-                with open(caddy_file, "a") as f:
-                    f.write(f"\n{lobby_domain} {{\n    reverse_proxy localhost:3099\n}}\n")
-            # Start Lobby
-            subprocess.run(["docker", "compose", "-f", "docker-compose.yml", "up", "-d", "hermes-lobby"],
-                           cwd="/opt/hermeshotel", capture_output=True)
+        # Start Caddy
+        draw_text(self.stdscr, 10, 2, "Starting Caddy...", curses.color_pair(3))
+        self.stdscr.refresh()
 
-        # Reload Caddy if running
-        result = subprocess.run(["caddy", "validate", "--config", caddy_file],
-                                capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
+        # Check if Caddy is already running
+        caddy_running = False
+        try:
+            result = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                                     "http://localhost:2019/"],
+                                    capture_output=True, text=True, timeout=5)
+            if result.stdout.strip() == "200":
+                caddy_running = True
+        except Exception:
+            pass
+
+        if caddy_running:
             subprocess.run(["caddy", "reload", "--config", caddy_file],
                            capture_output=True, text=True, timeout=10)
+        else:
+            # Start Caddy in daemon mode
+            subprocess.run(["caddy", "start", "--config", caddy_file],
+                           capture_output=True, text=True, timeout=15)
+            time.sleep(2)
 
-        # Reload agents
-        global AGENTS
-        AGENTS = get_agents()
+        # Verify Caddy
+        caddy_ok = False
+        try:
+            result = subprocess.run(["curl", "-sk", "-o", "/dev/null", "-w", "%{http_code}",
+                                     f"https://{agent_domain}"],
+                                    capture_output=True, text=True, timeout=10)
+            if result.stdout.strip() == "200":
+                caddy_ok = True
+        except Exception:
+            pass
 
         # ── Summary ──
         self.stdscr.erase()
         draw_text(self.stdscr, 1, 2, " SETUP COMPLETE ", curses.color_pair(6) | curses.A_BOLD)
         draw_arcane_box(self.stdscr, 0, 0, 3, w - 1, curses.color_pair(6))
         lines = [
-            f"✔ Hermes Agent: {agent_name}",
+            f"Hermes Agent: {agent_name}",
             f"  Domain: https://{agent_domain}",
             f"  API Key: {api_key[:12]}...",
             f"  LLM: {llm_url}",
             "",
         ]
         if lobby_domain:
-            lines += [f"✔ Lobby: https://{lobby_domain}", ""]
+            lines += [f"Lobby: https://{lobby_domain}", ""]
+        if caddy_ok:
+            lines += ["Caddy: OK (HTTPS active)", ""]
+        else:
+            lines += ["Caddy: Please check Caddy status",
+                       "  caddy reload --config /etc/caddy/Caddyfile", ""]
         lines += [
             "Containers are starting... wait ~15s then visit your domains.",
             "",
